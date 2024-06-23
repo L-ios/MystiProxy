@@ -1,25 +1,24 @@
-use std::collections::HashMap;
+#[cfg(test)]
+#[macro_use]
+extern crate test_case;
+
 use std::future::Future;
 use std::io;
 use std::io::Write;
-use std::net::{SocketAddr, ToSocketAddrs};
-use bytes::Bytes;
+use std::net::ToSocketAddrs;
 
-use http_body_util::{BodyExt, Empty, Full};
+use clap::Parser;
+use futures::{AsyncRead, AsyncWrite};
+use http_body_util::BodyExt;
 use hyper::body::{Body, Incoming};
 use hyper::client::conn::http1::{Builder, SendRequest};
-use hyper::{Request, Uri};
+use hyper::Request;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use tokio::net::{TcpListener, TcpStream, UnixStream};
-use clap::Parser;
-use futures::{AsyncRead, AsyncWrite, ready};
-use hyper_util::client::legacy::pool::Error;
-use tokio::runtime;
+use tokio::net::{TcpListener, UnixStream};
+
 use crate::arg::TUds;
-
-
 
 mod arg;
 mod proxy;
@@ -27,23 +26,24 @@ mod gateway;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-
     let uds = TUds::parse();
 
     let addr = match uds.listen.clone() {
-        None => {"127.0.0.1:3000".to_string()}
-        Some(addr) => {
-            println!("listen on : {}", addr);
-            addr
-        }
+        None => { "127.0.0.1:3000".to_string() }
+        Some(addr) => { addr }
     };
 
     let target = match uds.target.clone() {
-        None => {"/var/run/docker.sock".to_string()}
-        Some(target) => {target.to_string()}
+        None => { "/var/run/docker.sock".to_string() }
+        Some(target) => { target.to_string() }
     };
 
-    let listener = TcpListener::bind(addr).await.unwrap();
+    uds_proxy(addr, target).await
+}
+
+async fn uds_proxy(listen_addr: String, server_addr: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let listener = TcpListener::bind(listen_addr.clone()).await.unwrap();
+    println!("listen on: {}", listen_addr);
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_io()
@@ -53,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     loop {
         let (stream, _) = listener.accept().await.unwrap();
         runtime.spawn({
-            let target = target.clone();
+            let target = server_addr.clone();
             async move {
                 let io = TokioIo::new(stream);
 
@@ -67,8 +67,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                                 .method(req.method())
                                 .uri(req.uri());
                             // uri mapping 查找
-
-
 
 
                             for (k, v) in req.headers().iter() {
@@ -92,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     }
 }
 
-async fn get_target_stream(target: &str) -> io::Result<UnixStream>  {
+async fn get_target_stream(target: &str) -> io::Result<UnixStream> {
     // let sock_file: Option<&'static str> = option_env!("TARGET_SOCKET");
     UnixStream::connect(target).await
 }
@@ -118,9 +116,4 @@ async fn get_target(target: &str) -> Result<SendRequest<Incoming>, Box<dyn std::
 }
 
 
-#[cfg(test)]
-#[macro_use]
-extern crate test_case;
-mod tests {
-    use super::*;
-}
+mod tests {}
