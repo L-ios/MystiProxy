@@ -28,7 +28,7 @@ mod gateway;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
-    let mut uds = TUds::parse();
+    let uds = TUds::parse();
 
     let addr = match uds.listen.clone() {
         None => {"127.0.0.1:3000".to_string()}
@@ -36,6 +36,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             println!("listen on : {}", addr);
             addr
         }
+    };
+
+    let target = match uds.target.clone() {
+        None => {"/var/run/docker.sock".to_string()}
+        Some(target) => {target.to_string()}
     };
 
     let listener = TcpListener::bind(addr).await.unwrap();
@@ -47,47 +52,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .expect("failed to create tokio runtime");
     loop {
         let (stream, _) = listener.accept().await.unwrap();
-        runtime.spawn(async move {
-            let io = TokioIo::new(stream);
+        runtime.spawn({
+            let target = target.clone();
+            async move {
+                let io = TokioIo::new(stream);
 
-            // Finally, we bind the incoming connection to our `hello` service
-            if let Err(err) = http1::Builder::new()
-                // `service_fn` converts our function in a `Service`
-                .serve_connection(io, service_fn(|mut req: Request<Incoming>| async move {
-                    let mut r_builder = Request::builder()
-                        .method(req.method())
-                        .uri(req.uri());
-                    // uri mapping 查找
+                // Finally, we bind the incoming connection to our `hello` service
+                if let Err(err) = http1::Builder::new()
+                    // `service_fn` converts our function in a `Service`
+                    .serve_connection(io, service_fn(|mut req: Request<Incoming>| {
+                        let target = target.clone();
+                        async move {
+                            let mut r_builder = Request::builder()
+                                .method(req.method())
+                                .uri(req.uri());
+                            // uri mapping 查找
 
 
 
 
-                    for (k, v) in req.headers().iter() {
-                        r_builder = match k {
-                            &hyper::header::HOST => r_builder.header(hyper::header::HOST, "localhost"),
-                            _ => r_builder.header(k, v),
-                        };
-                    }
+                            for (k, v) in req.headers().iter() {
+                                r_builder = match k {
+                                    &hyper::header::HOST => r_builder.header(hyper::header::HOST, "localhost"),
+                                    _ => r_builder.header(k, v),
+                                };
+                            }
 
-                    let request = r_builder.body(req.into_body()).unwrap();
-                    let mut sender = get_target().await.unwrap();
-                    sender.send_request(request).await
-                }))
-                .await
-            {
-                eprintln!("Error serving connection: {:?}", err);
+                            let request = r_builder.body(req.into_body()).unwrap();
+                            let mut sender = get_target(target.as_str()).await.unwrap();
+                            sender.send_request(request).await
+                        }
+                    }))
+                    .await
+                {
+                    eprintln!("Error serving connection: {:?}", err);
+                }
             }
         });
     }
 }
 
-async fn get_target_stream() -> io::Result<UnixStream>  {
-    let sock_file: Option<&'static str> = option_env!("TARGET_SOCKET");
-    UnixStream::connect(sock_file.unwrap_or("/var/run/docker.sock")).await
+async fn get_target_stream(target: &str) -> io::Result<UnixStream>  {
+    // let sock_file: Option<&'static str> = option_env!("TARGET_SOCKET");
+    UnixStream::connect(target).await
 }
 
-async fn get_target() -> Result<SendRequest<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
-    let stream = get_target_stream().await?;
+async fn get_target(target: &str) -> Result<SendRequest<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    let stream = get_target_stream(target).await?;
     let io = TokioIo::new(stream);
 
     // Create the Hyper client
