@@ -8,19 +8,19 @@ pub struct TUds {
     ///
     /// 目标的uds文件
     // #[clap(&str)]
-    #[arg(short, long)]
+    #[arg(short, long, default_value = None)]
     pub target: Option<String>,
 
     /// listen socket
     ///
     /// 代理的本地端口
-    #[arg(short, long)]
+    #[arg(short, long, default_value = None)]
     pub listen: Option<String>,
 
     /// protocol
     ///
     /// 代理协议
-    #[arg(long, short)]
+    #[arg(short, long, default_value = None)]
     pub protocol: Option<String>,
 
     /// config file

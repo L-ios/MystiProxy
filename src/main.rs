@@ -8,68 +8,76 @@ use bytes::Bytes;
 use http_body_util::{BodyExt, Empty, Full};
 use hyper::body::{Body, Incoming};
 use hyper::client::conn::http1::{Builder, SendRequest};
-use hyper::Request;
+use hyper::{Request, Uri};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 use tokio::net::{TcpListener, TcpStream, UnixStream};
 use clap::Parser;
 use futures::{AsyncRead, AsyncWrite, ready};
+use hyper_util::client::legacy::pool::Error;
+use tokio::runtime;
 use crate::arg::TUds;
+
 
 
 mod arg;
 mod proxy;
+mod gateway;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
     let mut uds = TUds::parse();
 
     let addr = match uds.listen.clone() {
         None => {"127.0.0.1:3000".to_string()}
-        Some(addr) => {addr}
+        Some(addr) => {
+            println!("listen on : {}", addr);
+            addr
+        }
     };
 
-    match TcpListener::bind(addr).await {
-        Ok(listener) => {
-            loop {
-                match listener.accept().await {
-                    Ok((stream, _)) => {
-                        let io = TokioIo::new(stream);
-                        tokio::task::spawn(async move {
-                            // Finally, we bind the incoming connection to our `hello` service
-                            if let Err(err) = http1::Builder::new()
-                                // `service_fn` converts our function in a `Service`
-                                .serve_connection(io, service_fn(|mut req: Request<Incoming>| async move {
-                                    let mut r_builder = Request::builder()
-                                        .method(req.method())
-                                        .uri(req.uri());
+    let listener = TcpListener::bind(addr).await.unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_io()
+        .thread_name("sock-")
+        .build()
+        .expect("failed to create tokio runtime");
+    loop {
+        let (stream, _) = listener.accept().await.unwrap();
+        runtime.spawn(async move {
+            let io = TokioIo::new(stream);
 
-                                    for (k, v) in req.headers().iter() {
-                                        r_builder = match k {
-                                            &hyper::header::HOST => r_builder.header(hyper::header::HOST, "localhost"),
-                                            _ => r_builder.header(k, v),
-                                        };
-                                    }
+            // Finally, we bind the incoming connection to our `hello` service
+            if let Err(err) = http1::Builder::new()
+                // `service_fn` converts our function in a `Service`
+                .serve_connection(io, service_fn(|mut req: Request<Incoming>| async move {
+                    let mut r_builder = Request::builder()
+                        .method(req.method())
+                        .uri(req.uri());
+                    // uri mapping 查找
 
-                                    let request = r_builder.body(req.into_body()).unwrap();
-                                    let mut sender = get_target().await.unwrap();
-                                    sender.send_request(request).await
-                                }))
-                                .await
-                            {
-                                eprintln!("Error serving connection: {:?}", err);
-                            }
-                        });
 
+
+
+                    for (k, v) in req.headers().iter() {
+                        r_builder = match k {
+                            &hyper::header::HOST => r_builder.header(hyper::header::HOST, "localhost"),
+                            _ => r_builder.header(k, v),
+                        };
                     }
-                    Err(e) => {}
-                }
+
+                    let request = r_builder.body(req.into_body()).unwrap();
+                    let mut sender = get_target().await.unwrap();
+                    sender.send_request(request).await
+                }))
+                .await
+            {
+                eprintln!("Error serving connection: {:?}", err);
             }
-        }
-        Err(e) => {
-            Ok(())
-        }
+        });
     }
 }
 
@@ -96,4 +104,12 @@ async fn get_target() -> Result<SendRequest<Incoming>, Box<dyn std::error::Error
         }
     });
     return Ok(sender);
+}
+
+
+#[cfg(test)]
+#[macro_use]
+extern crate test_case;
+mod tests {
+    use super::*;
 }

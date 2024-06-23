@@ -24,16 +24,16 @@ pub struct Tunnel {
     pub local: String,
     pub target: String,
     pub protocol: Protocol,
-    pub rewriteHeader: Box<HashMap<String, String>>
+    pub rewrite_header: Box<HashMap<String, String>>
 }
 
 impl Tunnel {
-    pub fn new(local: String, target: String, protocol: Protocol, rewriteHeader: Box<HashMap<String, String>>) -> Self {
+    pub fn new(local: String, target: String, protocol: Protocol, rewrite_header: Box<HashMap<String, String>>) -> Self {
         Tunnel {
             local: local,
             target: target,
             protocol: protocol,
-            rewriteHeader: rewriteHeader
+            rewrite_header: rewrite_header
         }
     }
 

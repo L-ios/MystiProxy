@@ -98,9 +98,9 @@ impl UriMapping {
             };
             let variable = UriVariable{
                 name: variable_name.to_string(),
-                pattern: pattern,
+                pattern,
                 regex: Regex::new(regex.as_str()).unwrap(),
-                index: index,
+                index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
             index += 1;
@@ -201,10 +201,10 @@ impl UriMapping {
             UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
-                let inMap = Self::uri_variable(base_uri);
+                let in_map = Self::uri_variable(base_uri);
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
-                for (_, regex_pattern) in &inMap {
+                for (_, regex_pattern) in &in_map {
                     processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.regex.as_str()));
                 }
 
@@ -227,10 +227,10 @@ impl UriMapping {
 
                 // 通过遍历map，转移target
                 let mut target_uri = self.target_uri.as_ref().unwrap().to_string();
-                let outMap = Self::uri_variable(self.target_uri.as_ref().unwrap());
-                for (_, regex_pattern) in &outMap {
+                let out_map = Self::uri_variable(self.target_uri.as_ref().unwrap());
+                for (_, regex_pattern) in &out_map {
                     let name = regex_pattern.name.as_str();
-                    match inMap.get(name) {
+                    match in_map.get(name) {
                         Some(variable) => {
                             let path = match_var.get(&variable.index).unwrap();
                             target_uri = target_uri.replace(&regex_pattern.origin(), path);
