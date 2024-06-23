@@ -1,0 +1,9 @@
+service:
+  - name: docker
+    listen: '127.0.0.1:10000'
+    protocol: http
+    timeout: 10s
+    target: /var/run/docker.sock
+    http_header:
+      Host: localhost
+uri_mapping: xxx.json

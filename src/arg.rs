@@ -1,5 +1,7 @@
-use std::string::ToString;
+use std::collections::HashMap;
+
 use clap::Parser;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -28,4 +30,22 @@ pub struct TUds {
     /// config file
     #[arg(short, long, default_value = None)]
     pub config: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Service {
+    pub name: String,
+    pub listen: String,
+    pub target: String,
+    pub protocol: String,
+
+    pub timeout: Option<String>,
+    pub http_header: Option<HashMap<String, String>>,
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub service: Vec<Service>,
+    pub uri_mapping: Option<String>,
 }

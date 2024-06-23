@@ -5,7 +5,7 @@ use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-struct UriMapping {
+pub struct UriMapping {
     #[serde(
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "UriMapping::serialize_method",
