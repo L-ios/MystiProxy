@@ -32,14 +32,13 @@ pub struct UriMapping {
 struct UriVariable {
     name: String,
     pattern: Option<String>,
-    regex: Regex,
     index: usize,
 }
 
 impl UriVariable {
     pub fn to_pattern(&self) -> String {
         match self.pattern.as_ref() {
-            None => "\\w+".to_string(),
+            None => "[\\w|-]+".to_string(),
             Some(pattern) => {
                 pattern.to_string()
             }
@@ -99,7 +98,6 @@ impl UriMapping {
             let variable = UriVariable{
                 name: variable_name.to_string(),
                 pattern,
-                regex: Regex::new(regex.as_str()).unwrap(),
                 index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
@@ -156,7 +154,7 @@ impl UriMapping {
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in variable_patterns {
-                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.regex.as_str()));
+                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.to_pattern()));
                 }
 
                 // 构造正则表达式并尝试匹配
@@ -205,7 +203,7 @@ impl UriMapping {
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in &in_map {
-                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.regex.as_str()));
+                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.to_pattern()));
                 }
 
                 // 构造正则表达式并尝试匹配
@@ -319,6 +317,8 @@ mod tests {
     "/api/users/123/records/456" => "/user/123/record/456"; "user record transform")]
     #[test_case("/api/users/{rid}/records/{id}", "/record/{id}/user/{rid}",
     "/api/users/123/records/456" => "/record/456/user/123"; "user record transform with switch")]
+    #[test_case("/api/users/{rid}/records/{id}", "/record/{id}/user/{rid}",
+    "/api/users/123-456-789/records/456-789-123" => "/record/456-789-123/user/123-456-789"; "uuid in path")]
     fn uri_matching_test(in_pattern_uri: &str, target_pattern_uri: &str, in_uri: &str) -> String{
         let mut mapping = UriMapping::default();
         mapping.uri = Some(in_pattern_uri.to_string());
