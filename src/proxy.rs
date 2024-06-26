@@ -37,7 +37,7 @@ impl Tunnel {
         }
     }
 
-    pub fn proxys(&self) {
+    pub fn proxy(&self) {
         match self.protocol {
             Protocol::TCP => {}
             Protocol::Http => {}
