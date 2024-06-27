@@ -104,7 +104,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             }
         });
         runtimes.push(handler);
-    }
+    } // 此处销毁runtime，会存在问题
     join_all(runtimes).await;
 
     Ok(())
