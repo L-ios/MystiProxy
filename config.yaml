@@ -1,9 +1,16 @@
 service:
   - name: docker
     listen: '127.0.0.1:10000'
-    protocol: http
+    protocol: uds+http
     timeout: 10s
     target: /var/run/docker.sock
     http_header:
       Host: localhost
+  - name: server
+    listen: "127.0.0.1:100001"
+    protocol: 'tcp+https'
+    timeout: 10s
+    target: "192.168.1.1:5244"
+    http_header:
+      Host: '192.168.1.1'
 uri_mapping: xxx.json

@@ -3,60 +3,43 @@
 extern crate test_case;
 
 use std::fs::File;
-use std::future::Future;
 use std::io;
 use std::io::{BufReader, Write};
 use std::net::ToSocketAddrs;
+use std::sync::Arc;
 
 use clap::Parser;
-use futures::{AsyncRead, AsyncWrite};
+use env_logger::Env;
+use futures::{AsyncRead, AsyncWrite, FutureExt};
+use futures::future::join_all;
 use http_body_util::BodyExt;
 use hyper::body::{Body, Incoming};
 use hyper::client::conn::http1::{Builder, SendRequest};
-use hyper::Request;
+use hyper::{Request, service};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
+use log::info;
 use tokio::net::{TcpListener, UnixStream};
-use tokio::runtime;
 use tokio::runtime::Runtime;
 
-use crate::arg::{Config, TUds};
+use crate::arg::{Config, Service, TUds};
 use crate::gateway::UriMapping;
 
 mod arg;
 mod proxy;
 mod gateway;
+mod stream;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .format(|buf, record| writeln!(buf, "{}", record.args())).init();
     let uds = TUds::parse();
 
-    if uds.config.is_none() {
-        let addr = match uds.listen.clone() {
-            None => { "127.0.0.1:3000".to_string() }
-            Some(addr) => { addr }
-        };
+    info!("start");
 
-        let target = match uds.target.clone() {
-            None => { "/var/run/docker.sock".to_string() }
-            Some(target) => { target.to_string() }
-        };
-
-        let protocol = match uds.protocol.clone() {
-            None => { "http".to_string() }
-            Some(protocol) => { protocol }
-        };
-
-        match protocol.as_str() {
-            "http" => uds_http_proxy(addr, target).await,
-            // "tcp" => uds_tcp_proxy(addr, target).await,
-            _ => {
-                println!("protocol not support");
-                Err("protocol not support".into())
-            }
-        }
-    } else {
+    let (services, uri_mapping) = if uds.config.is_some() {
         let config_path = uds.config.unwrap();
         let config_reader = match File::open(config_path) {
             Ok(file) => {Ok(BufReader::new(file))},
@@ -65,58 +48,82 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         let config: Config = serde_yaml::from_reader(config_reader)?;
 
-        println!("config: {:?}", config);
-
         let uri_mapping: Vec<UriMapping> = if config.uri_mapping.is_some() {
             let uri_mapping = &config.uri_mapping.clone().unwrap();
             let uri_mapping = match File::open(uri_mapping) {
                 Ok(file) => {Ok(BufReader::new(file))},
-                Err(err) => Err(format!("not found uri_mapping file: {}", uri_mapping))
+                Err(_) => Err(format!("not found uri_mapping file: {}", uri_mapping))
             }.unwrap();
             serde_json::from_reader(uri_mapping)?
         } else {
             vec![]
         };
 
-        println!("uri_mapping: {:?}", uri_mapping);
+        (config.service, uri_mapping)
+    } else {
+        (vec![Service {
+            name: "default".to_string(),
+            listen: match uds.listen.clone() {
+                None => { "127.0.0.1:3000".to_string() }
+                Some(addr) => { addr }
+            },
+            target: match uds.target.clone() {
+                None => { "/var/run/docker.sock".to_string() }
+                Some(target) => { target.to_string() }
+            },
+            protocol: match uds.protocol.clone() {
+                None => { "http".to_string() }
+                Some(protocol) => { protocol }
+            },
+            timeout: None,
+            http_header: None,
+        }],
+        vec![])
+    };
 
-        let mut runtimes: Vec<Runtime> = vec![];
+    let mut runtimes= vec![];
 
-        for service in &config.service {
-            // fix 当前for循环存在问题
-            let runtime = tokio::runtime::Builder::new_current_thread()
-                .enable_io()
-                .thread_name(format!("{}-", service.name))
-                .build()
-                .expect("failed to create tokio runtime");
-            runtime.spawn({
-                let target = service.target.clone();
-                let listen_addr = service.listen.clone();
-                async move {
-                    uds_http_proxy(listen_addr, target);
+    // let services = Box::new(services);
+    for service in services {
+        // fix 当前for循环存在问题
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_io()
+            .thread_name(format!("{}-", service.name))
+            .build()
+            .expect("failed to create tokio runtime");
+        let handler = runtime.spawn({
+            async move {
+                match service.protocol.as_str() {
+                    "http" => uds_http_proxy(Arc::new(service)).await,
+                    // "tcp" => uds_tcp_proxy(addr, target).await,
+                    _ => {
+                        println!("protocol not support");
+                        Err("protocol not support".into())
+                    }
                 }
-            });
-            runtimes.push(runtime);
-        }
-        Ok(())
-
-        // Err("config file not support".into())
+            }
+        });
+        runtimes.push(handler);
     }
+    join_all(runtimes).await;
+
+    Ok(())
 }
 
-async fn uds_http_proxy(listen_addr: String, server_addr: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let listener = TcpListener::bind(listen_addr.clone()).await.unwrap();
-    println!("listen on: {}", listen_addr);
+async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_io()
-        .thread_name("sock-")
+        .thread_name(format!("{}-proxy-", service.name))
         .build()
         .expect("failed to create tokio runtime");
-    loop {
-        let (stream, _) = listener.accept().await.unwrap();
+
+    let listener = TcpListener::bind(service.listen.as_str()).await.unwrap();
+    info!("uds http proxy start: {}", service.listen);
+    while let Ok((stream, con)) = listener.accept().await {
+        // 加入到队列中，由统一线程处理
         runtime.spawn({
-            let target = server_addr.clone();
+            let service_arc = service.clone();
             async move {
                 let io = TokioIo::new(stream);
 
@@ -124,7 +131,7 @@ async fn uds_http_proxy(listen_addr: String, server_addr: String) -> Result<(), 
                 if let Err(err) = http1::Builder::new()
                     // `service_fn` converts our function in a `Service`
                     .serve_connection(io, service_fn(|mut req: Request<Incoming>| {
-                        let target = target.clone();
+                        let service_arc = service_arc.clone();
                         async move {
                             let mut r_builder = Request::builder()
                                 .method(req.method())
@@ -140,7 +147,7 @@ async fn uds_http_proxy(listen_addr: String, server_addr: String) -> Result<(), 
                             }
 
                             let request = r_builder.body(req.into_body()).unwrap();
-                            let mut sender = get_target(target.as_str()).await.unwrap();
+                            let mut sender = get_target(service_arc.target.as_str()).await.unwrap();
                             sender.send_request(request).await
                         }
                     }))
@@ -151,6 +158,8 @@ async fn uds_http_proxy(listen_addr: String, server_addr: String) -> Result<(), 
             }
         });
     }
+
+    Ok(())
 }
 
 async fn get_target_stream(target: &str) -> io::Result<UnixStream> {
@@ -178,5 +187,5 @@ async fn get_target(target: &str) -> Result<SendRequest<Incoming>, Box<dyn std::
     return Ok(sender);
 }
 
-
+#[cfg(test)]
 mod tests {}
