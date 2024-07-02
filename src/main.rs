@@ -1,11 +1,14 @@
 #[cfg(test)]
 #[macro_use]
 extern crate test_case;
+extern crate core;
 
 use std::fs::File;
-use std::io;
+use std::thread;
+use std::io as stdio;
 use std::io::{BufReader, Write};
 use std::net::ToSocketAddrs;
+use std::process::exit;
 use std::sync::Arc;
 
 use clap::Parser;
@@ -19,7 +22,7 @@ use hyper::{Request, service};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
-use log::info;
+use log::{error, info};
 use tokio::net::{TcpListener, UnixStream};
 use tokio::runtime::Runtime;
 
@@ -29,12 +32,14 @@ use crate::gateway::UriMapping;
 mod arg;
 mod proxy;
 mod gateway;
-mod stream;
+mod io;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-        .format(|buf, record| writeln!(buf, "{}", record.args())).init();
+        .format(|buf, record| {
+            writeln!(buf, "[{}]- {}", thread::current().name().unwrap_or("main"), record.args())
+        }).init();
     let uds = TUds::parse();
 
     info!("start");
@@ -82,15 +87,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     };
 
     let mut runtimes= vec![];
+    // fix 当前for循环存在问题
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_time()
+        .enable_io()
+        .thread_name_fn(|| {
+            format!("odd-")
+        })
+        // .thread_name(format!("{}-", service.name))
+        .build()
+        .expect("failed to create tokio runtime");
 
     // let services = Box::new(services);
     for service in services {
-        // fix 当前for循环存在问题
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_io()
-            .thread_name(format!("{}-", service.name))
-            .build()
-            .expect("failed to create tokio runtime");
         let handler = runtime.spawn({
             async move {
                 match service.protocol.as_str() {
@@ -162,7 +171,7 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-async fn get_target_stream(target: &str) -> io::Result<UnixStream> {
+async fn get_target_stream(target: &str) -> stdio::Result<UnixStream> {
     // let sock_file: Option<&'static str> = option_env!("TARGET_SOCKET");
     UnixStream::connect(target).await
 }

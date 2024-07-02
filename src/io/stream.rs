@@ -6,13 +6,13 @@ use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpStream, UnixStream};
 
-enum NetworkStream {
+pub enum SocketStream {
     Tcp(TcpStream),
-    Unix(UnixStream),
+    Uds(UnixStream)
 }
 
 
-impl  NetworkStream {
+impl SocketStream {
     async fn try_from(addr: String) -> Result<Self, Box<dyn Error>> {
         if ! addr.contains("://") {
             todo!("invalid url")
@@ -24,13 +24,13 @@ impl  NetworkStream {
             "tcp" => {
                 TcpStream::connect(addr)
                     .await
-                    .map(NetworkStream::Tcp)
+                    .map(Self::Tcp)
                     .map_err(Into::into)
             },
             "unix" => {
                 UnixStream::connect(addr)
                     .await
-                    .map(NetworkStream::Unix)
+                    .map(Self::Uds)
                     .map_err(Into::into)
             },
             _ => todo!("not for support {}", protocol)
@@ -39,37 +39,37 @@ impl  NetworkStream {
 
 }
 
-impl AsyncRead for NetworkStream {
+impl AsyncRead for SocketStream {
     fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
         match *self {
-            NetworkStream::Tcp(ref mut stream) => Pin::new(stream).poll_read(cx, buf),
-            NetworkStream::Unix(ref mut stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::Tcp(ref mut stream) => Pin::new(stream).poll_read(cx, buf),
+            Self::Uds(ref mut stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
 
-impl AsyncWrite for NetworkStream {
+impl AsyncWrite for SocketStream {
     fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, io::Error>> {
         match *self {
-            NetworkStream::Tcp(ref mut stream) => Pin::new(stream).poll_write(cx, buf),
-            NetworkStream::Unix(ref mut stream) => Pin::new(stream).poll_write(cx, buf),
+            Self::Tcp(ref mut stream) => Pin::new(stream).poll_write(cx, buf),
+            Self::Uds(ref mut stream) => Pin::new(stream).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match *self {
-            NetworkStream::Tcp(ref mut stream) => Pin::new(stream).poll_flush(cx),
-            NetworkStream::Unix(ref mut stream) => Pin::new(stream).poll_flush(cx),
+            Self::Tcp(ref mut stream) => Pin::new(stream).poll_flush(cx),
+            Self::Uds(ref mut stream) => Pin::new(stream).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match *self {
-            NetworkStream::Tcp(ref mut stream) => Pin::new(stream).poll_shutdown(cx),
-            NetworkStream::Unix(ref mut stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::Tcp(ref mut stream) => Pin::new(stream).poll_shutdown(cx),
+            Self::Uds(ref mut stream) => Pin::new(stream).poll_shutdown(cx),
         }
     }
 }
 
-impl Unpin for NetworkStream {}
+impl Unpin for SocketStream {}
 

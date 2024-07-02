@@ -122,6 +122,7 @@ impl UriMapping {
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
     fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
+        todo!("前缀匹配，一定以/进行结尾");
         match self.uri.as_ref() {
             None => None,
             Some(uri) => {
@@ -195,8 +196,15 @@ impl UriMapping {
 
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
-            UriMatch::Exact => Some(in_uri.to_string()),
-            UriMatch::Prefix => Some(in_uri.to_string()),
+            UriMatch::Exact => {
+                todo!("重新处理")
+                //Some(*self.target_uri.clone());
+
+            },
+            UriMatch::Prefix => {
+                todo!("判断一下，再处理")
+                //Some(in_uri.replace(self.uri.unwrap().clone().as_str(), self.target_uri.unwrap().as_str()))
+            },
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
                 let in_map = Self::uri_variable(base_uri);
