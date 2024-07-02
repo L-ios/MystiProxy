@@ -38,14 +38,16 @@ pub struct Service {
     pub listen: String,
     pub target: String,
     pub protocol: String,
-
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uri_mapping: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<String>,
-    pub http_header: Option<HashMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub header: Option<HashMap<String, String>>,
 }
 
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub service: Vec<Service>,
-    pub uri_mapping: Option<String>,
 }

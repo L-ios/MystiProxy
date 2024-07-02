@@ -13,4 +13,3 @@ service:
     target: "192.168.1.1:5244"
     http_header:
       Host: '192.168.1.1'
-uri_mapping: xxx.json

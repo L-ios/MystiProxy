@@ -3,6 +3,7 @@
 extern crate test_case;
 extern crate core;
 
+use std::fmt::Debug;
 use std::fs::File;
 use std::thread;
 use std::io as stdio;
@@ -10,6 +11,8 @@ use std::io::{BufReader, Write};
 use std::net::ToSocketAddrs;
 use std::process::exit;
 use std::sync::Arc;
+use std::time::{Instant, SystemTime};
+use chrono::Utc;
 
 use clap::Parser;
 use env_logger::Env;
@@ -36,15 +39,23 @@ mod io;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .format(|buf, record| {
-            writeln!(buf, "[{}]- {}", thread::current().name().unwrap_or("main"), record.args())
+            writeln!(buf,
+                     "{} {} [{}] {}:{} {}",
+                     format!("{}", Utc::now().format("%Y-%m-%d %H:%M:%S")),
+                     record.level(),
+                     thread::current().name().unwrap_or("main"),
+                     record.file().unwrap_or(""),
+                     record.line().unwrap_or(0),
+                     record.args())
         }).init();
     let uds = TUds::parse();
 
     info!("start");
 
-    let (services, uri_mapping) = if uds.config.is_some() {
+    let services = if uds.config.is_some() {
         let config_path = uds.config.unwrap();
         let config_reader = match File::open(config_path) {
             Ok(file) => {Ok(BufReader::new(file))},
@@ -53,20 +64,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         let config: Config = serde_yaml::from_reader(config_reader)?;
 
-        let uri_mapping: Vec<UriMapping> = if config.uri_mapping.is_some() {
-            let uri_mapping = &config.uri_mapping.clone().unwrap();
-            let uri_mapping = match File::open(uri_mapping) {
-                Ok(file) => {Ok(BufReader::new(file))},
-                Err(_) => Err(format!("not found uri_mapping file: {}", uri_mapping))
-            }.unwrap();
-            serde_json::from_reader(uri_mapping)?
-        } else {
-            vec![]
-        };
-
-        (config.service, uri_mapping)
+        config.service
     } else {
-        (vec![Service {
+        vec![Service {
             name: "default".to_string(),
             listen: match uds.listen.clone() {
                 None => { "127.0.0.1:3000".to_string() }
@@ -81,9 +81,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 Some(protocol) => { protocol }
             },
             timeout: None,
-            http_header: None,
-        }],
-        vec![])
+            header: None,
+            uri_mapping: None,
+        }]
     };
 
     let mut runtimes= vec![];
