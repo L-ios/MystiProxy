@@ -5,7 +5,7 @@ use std::io;
 use tokio::net::{TcpListener, TcpSocket, UnixListener, UnixSocket};
 use crate::io::stream::SocketStream;
 
-enum StreamListener {
+pub enum StreamListener {
     TCP(TcpListener),
     UDS(UnixListener),
 }

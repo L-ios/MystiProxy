@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -13,7 +12,7 @@ pub enum SocketStream {
 
 
 impl SocketStream {
-    async fn try_from(addr: String) -> Result<Self, Box<dyn Error>> {
+    pub async fn connect(addr: String) -> io::Result<Self> {
         if ! addr.contains("://") {
             todo!("invalid url")
         }
@@ -25,13 +24,11 @@ impl SocketStream {
                 TcpStream::connect(addr)
                     .await
                     .map(Self::Tcp)
-                    .map_err(Into::into)
             },
             "unix" => {
                 UnixStream::connect(addr)
                     .await
                     .map(Self::Uds)
-                    .map_err(Into::into)
             },
             _ => todo!("not for support {}", protocol)
         }

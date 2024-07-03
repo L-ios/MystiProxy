@@ -3,6 +3,7 @@ use std::io;
 
 use futures::FutureExt;
 use tokio::io::{AsyncRead, AsyncWrite, copy_bidirectional};
+use crate::io::{SocketStream, StreamListener};
 
 pub trait Proxy {
     async fn proxy<A, B>(&self, a: &mut A, b: &mut B) -> io::Result<(u64, u64)>
@@ -17,20 +18,22 @@ enum Protocol {
 }
 
 pub struct Tunnel {
-    pub local: String,
-    pub target: String,
+    pub local: StreamListener,
+    pub target: SocketStream,
     pub protocol: Protocol,
-    pub rewrite_header: Box<HashMap<String, String>>,
 }
 
 impl Tunnel {
-    pub fn new(local: String, target: String, protocol: Protocol, rewrite_header: Box<HashMap<String, String>>) -> Self {
-        Tunnel {
-            local: local,
-            target: target,
-            protocol: protocol,
-            rewrite_header: rewrite_header,
-        }
+    pub fn new(local: String, target: String, protocol: Protocol) -> Self {
+        todo!("Tunnel::new")
+    }
+
+    pub fn listen() {
+        todo!("Tunnel::listen")
+    }
+
+    pub fn accept() {
+        todo!("Tunnel::accept")
     }
 }
 

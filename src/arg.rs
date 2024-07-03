@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-pub struct TUds {
+pub struct CliArg {
     /// target socket
     ///
     /// 目标的uds文件
