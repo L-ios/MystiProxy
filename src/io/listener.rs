@@ -2,7 +2,7 @@ use core::net;
 use std::fmt::{Display, Formatter};
 use std::io;
 
-use tokio::net::{TcpListener, TcpSocket, UnixListener, UnixSocket};
+use tokio::net::{TcpListener, TcpSocket, UnixListener, UnixSocket, unix};
 use crate::io::stream::SocketStream;
 
 pub enum StreamListener {
@@ -16,8 +16,8 @@ impl StreamListener {
             let listen = listen.replace("tcp://", "");
             let listener = TcpListener::bind(listen).await?;
             Ok(Self::TCP(listener))
-        } else if listen.starts_with("uds://") {
-            let listen = listen.replace("uds://", "");
+        } else if listen.starts_with("unix://") {
+            let listen = listen.replace("unix://", "");
             let listener = UnixListener::bind(listen)?;
             Ok(Self::UDS(listener))
         } else {
@@ -44,12 +44,15 @@ impl StreamListener {
 
 pub enum SocketAddr {
     Tcp(net::SocketAddr),
-    Uds(tokio::net::unix::SocketAddr),
+    Uds(unix::SocketAddr),
 }
 
 impl Display for SocketAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        match self {
+            Self::Tcp(addr) => write!(f, "tcp://{}", addr),
+            Self::Uds(addr) => write!(f, "unix://{:?}", addr)
+        }
     }
 }
 
