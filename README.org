@@ -1,6 +1,6 @@
 * 微服务模拟器 （Mystiproxy）
 
-  主要解决，服务迁移到，导致一系列调试，中间态的问题
+  主要解决，服务迁移到，导致一系列调试，中间态的问题，验证方式，一开始主要是为了观察docker等以uds文件进行通行的应用
 * 主要功能
   1. 用于转发4层协议
      - tcp
@@ -66,6 +66,19 @@
     - [ ] uri的处理
     - [ ] header 的处理
     - [ ] body 的处理
+  - [ ] uri-mapping 路由映射，路由映射主要提供4中模式
+    - Full :: 全路径匹配
+    - Prefix :: 前缀匹配
+    - Regex :: 带参数的正则匹配
+    - PrefixRegex :: 带正则的前缀匹配
+    #+begin_src text
+      当baseUri = /时，in_uri = /a/b/c时，返回Some(Prefix)
+      当baseUri = /a/b/c时，in_uri = /a/b/c/d/e时，返回Some(Prefix)
+      当baseUri = /a/b/c时，in_uri = /a/b/c时，返回Some(Full)
+      当baseUri = /a/{id}/c时，in_uri = /a/b/c时，返回Some(Regex)，其中{id}是参数，匹配inUri中的b
+      当baseUri = /a/{id}/c时，in_uri = /a/b/c/d/e时，返回Some(PrefixRegex)，其中{id}是参数，匹配inUri中的b
+      当baseUri = /a/{id}/c时，in_uri = /a/b/d/e/f时，返回None
+    #+end_src
   - [ ] mock响应，主要是根据请求中某些内容，直接进行响应，或者处理响应后再响应 [0%]
     - [ ] 根据请求中的URI，进行响应
     - [ ] 根据请求头，进行响应
