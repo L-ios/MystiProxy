@@ -39,9 +39,7 @@ impl UriVariable {
     pub fn to_pattern(&self) -> String {
         match self.pattern.as_ref() {
             None => "[\\w|-]+".to_string(),
-            Some(pattern) => {
-                pattern.to_string()
-            }
+            Some(pattern) => pattern.to_string(),
         }
     }
 
@@ -91,11 +89,14 @@ impl UriMapping {
                     if matchs.as_str().len() == 0 {
                         (None, "\\w+".to_string())
                     } else {
-                        (Some(matchs.as_str().to_string()), matchs.as_str().to_string())
+                        (
+                            Some(matchs.as_str().to_string()),
+                            matchs.as_str().to_string(),
+                        )
                     }
                 }
             };
-            let variable = UriVariable{
+            let variable = UriVariable {
                 name: variable_name.to_string(),
                 pattern,
                 index,
@@ -104,7 +105,7 @@ impl UriMapping {
             index += 1;
         }
 
-        return variable_patterns
+        return variable_patterns;
     }
 
     /// # uri的匹配模式
@@ -149,13 +150,16 @@ impl UriMapping {
                         Some(UriMatch::Prefix)
                     } else {
                         None
-                    }
+                    };
                 }
 
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in variable_patterns {
-                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.to_pattern()));
+                    processed_base_uri = processed_base_uri.replace(
+                        &regex_pattern.origin(),
+                        &format!(r"({})", regex_pattern.to_pattern()),
+                    );
                 }
 
                 // 构造正则表达式并尝试匹配
@@ -167,7 +171,7 @@ impl UriMapping {
                     for cap in regex.captures_iter(in_uri) {
                         for i in 1..cap.len() {
                             match cap.get(i) {
-                                None => {},
+                                None => {}
                                 Some(matchs) => {
                                     println!("{}: {}", i, matchs.as_str());
                                     match_var.insert(i, matchs.as_str().to_string());
@@ -175,18 +179,19 @@ impl UriMapping {
                                 }
                             }
                         }
-
                     }
                     return match in_uri.get(0..end) {
                         None => None,
                         Some(mactched) => {
-                            if mactched.len() == in_uri.len() || (mactched.len()+1 == in_uri.len() && in_uri.ends_with("/")){
+                            if mactched.len() == in_uri.len()
+                                || (mactched.len() + 1 == in_uri.len() && in_uri.ends_with("/"))
+                            {
                                 Some(UriMatch::Variable)
                             } else {
                                 Some(UriMatch::VariablePrefix)
                             }
                         }
-                    }
+                    };
                 } else {
                     None
                 }
@@ -199,19 +204,21 @@ impl UriMapping {
             UriMatch::Exact => {
                 todo!("重新处理")
                 //Some(*self.target_uri.clone());
-
-            },
+            }
             UriMatch::Prefix => {
                 todo!("判断一下，再处理")
                 //Some(in_uri.replace(self.uri.unwrap().clone().as_str(), self.target_uri.unwrap().as_str()))
-            },
+            }
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
                 let in_map = Self::uri_variable(base_uri);
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in &in_map {
-                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.to_pattern()));
+                    processed_base_uri = processed_base_uri.replace(
+                        &regex_pattern.origin(),
+                        &format!(r"({})", regex_pattern.to_pattern()),
+                    );
                 }
 
                 // 构造正则表达式并尝试匹配
@@ -226,7 +233,7 @@ impl UriMapping {
                             }
                             _ => {
                                 return None;
-                            },
+                            }
                         }
                     }
                 }
@@ -240,7 +247,7 @@ impl UriMapping {
                         Some(variable) => {
                             let path = match_var.get(&variable.index).unwrap();
                             target_uri = target_uri.replace(&regex_pattern.origin(), path);
-                        },
+                        }
                         _ => {
                             return None;
                         }
@@ -250,7 +257,6 @@ impl UriMapping {
                 Some(target_uri)
             }
         }
-
     }
 
     fn deserialize_method<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -258,10 +264,11 @@ impl UriMapping {
         D: Deserializer<'de>,
     {
         match String::deserialize(deserializer) {
-            Ok(methos) => {
-                Ok(methos.split(",").map(|method| method.to_uppercase().to_string()).collect())
-            }
-            Err(err) => Err(err)
+            Ok(methos) => Ok(methos
+                .split(",")
+                .map(|method| method.to_uppercase().to_string())
+                .collect()),
+            Err(err) => Err(err),
         }
     }
     fn serialize_method<S>(methods: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
@@ -300,7 +307,6 @@ mod tests {
         assert_eq!(result, 4);
     }
 
-
     #[test_case("/", "/" => Some(UriMatch::Exact); "1. exact match")]
     #[test_case("/", "/test" => Some(UriMatch::Prefix); "2. prefix match with root")]
     #[test_case("/api/users", "/api/users/123" => Some(UriMatch::Prefix); "3. prefix match with users")]
@@ -320,20 +326,16 @@ mod tests {
         mapping.match_uri(in_uri)
     }
 
-
     #[test_case("/api/users/{id:[0-9]+}/records/{rid:[0-9]+}", "/user/{id}/record/{rid}",
     "/api/users/123/records/456" => "/user/123/record/456"; "user record transform")]
     #[test_case("/api/users/{rid}/records/{id}", "/record/{id}/user/{rid}",
     "/api/users/123/records/456" => "/record/456/user/123"; "user record transform with switch")]
     #[test_case("/api/users/{rid}/records/{id}", "/record/{id}/user/{rid}",
     "/api/users/123-456-789/records/456-789-123" => "/record/456-789-123/user/123-456-789"; "uuid in path")]
-    fn uri_matching_test(in_pattern_uri: &str, target_pattern_uri: &str, in_uri: &str) -> String{
+    fn uri_matching_test(in_pattern_uri: &str, target_pattern_uri: &str, in_uri: &str) -> String {
         let mut mapping = UriMapping::default();
         mapping.uri = Some(in_pattern_uri.to_string());
         mapping.target_uri = Some(target_pattern_uri.to_string());
         mapping.build_target_uri(in_uri).unwrap()
     }
-
-
-
 }

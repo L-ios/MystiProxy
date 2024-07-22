@@ -3,61 +3,62 @@
 extern crate test_case;
 extern crate core;
 
+use bytes::Bytes;
+use chrono::Utc;
 use std::convert::Infallible;
 use std::fs::File;
-use std::{result, thread};
 use std::io as stdio;
 use std::io::{BufReader, Stderr, Write};
 use std::net::ToSocketAddrs;
 use std::process::exit;
 use std::sync::Arc;
-use bytes::Bytes;
-use chrono::Utc;
+use std::{result, thread};
 
 use clap::Parser;
 use env_logger::Env;
-use futures::{FutureExt};
 use futures::future::join_all;
-use http_body_util::{BodyExt, Full};
+use futures::FutureExt;
 use http_body_util::combinators::BoxBody;
-use hyper::body::{Incoming};
+use http_body_util::{BodyExt, Full};
+use hyper::body::Incoming;
 use hyper::client::conn::http1::{Builder, SendRequest};
-use hyper::{header, Request, Response};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper_util::{
-    rt::{TokioIo},
-    server::{
-        conn::auto::Builder as ServerAutoBuilder,
-        graceful::GracefulShutdown
-    },
-};
+use hyper::{header, Request, Response};
 use hyper_util::rt::TokioExecutor;
+use hyper_util::{
+    rt::TokioIo,
+    server::{conn::auto::Builder as ServerAutoBuilder, graceful::GracefulShutdown},
+};
 use log::{error, info};
 use tokio::runtime::Runtime;
 
-use crate::arg::{Config, Service, CliArg};
+use crate::arg::{CliArg, Config, Service};
 use crate::gateway::UriMapping;
 use crate::io::{SocketStream, StreamListener};
 
 mod arg;
-mod proxy;
 mod gateway;
 mod io;
+mod mocker;
+mod proxy;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .format(|buf, record| {
-            writeln!(buf,
-                     "{} {} [{}] {}:{} {}",
-                     format!("{}", Utc::now().format("%Y-%m-%d %H:%M:%S")),
-                     record.level(),
-                     thread::current().name().unwrap_or("main"),
-                     record.file().unwrap_or(""),
-                     record.line().unwrap_or(0),
-                     record.args())
-        }).init();
+            writeln!(
+                buf,
+                "{} {} [{}] {}:{} {}",
+                format!("{}", Utc::now().format("%Y-%m-%d %H:%M:%S")),
+                record.level(),
+                thread::current().name().unwrap_or("main"), //统一长度
+                record.file().unwrap_or(""),
+                record.line().unwrap_or(0),
+                record.args()
+            )
+        })
+        .init();
     let cli_arg = CliArg::parse();
 
     info!("start");
@@ -65,9 +66,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let services = if cli_arg.config.is_some() {
         let config_path = cli_arg.config.unwrap();
         let config_reader = match File::open(config_path) {
-            Ok(file) => {Ok(BufReader::new(file))},
-            Err(err) => Err(err)
-        }.unwrap();
+            Ok(file) => Ok(BufReader::new(file)),
+            Err(err) => Err(err),
+        }
+        .unwrap();
 
         let config: Config = serde_yaml::from_reader(config_reader)?;
 
@@ -76,19 +78,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         vec![Service {
             name: "default".to_string(),
             listen: match cli_arg.listen.clone() {
-                None => { "127.0.0.1:3000".to_string() }
-                Some(addr) => { addr }
+                None => "127.0.0.1:3000".to_string(),
+                Some(addr) => addr,
             },
             target: match cli_arg.target.clone() {
                 None => {
                     error!("target is none");
                     exit(1)
                 }
-                Some(target) => { target.to_string() }
+                Some(target) => target.to_string(),
             },
             protocol: match cli_arg.protocol.clone() {
-                None => { "http".to_string() }
-                Some(protocol) => { protocol }
+                None => "http".to_string(),
+                Some(protocol) => protocol,
             },
             timeout: None,
             header: None,
@@ -101,9 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_time()
         .enable_io()
-        .thread_name_fn(|| {
-            format!("odd-")
-        })
+        .thread_name_fn(|| format!("odd-"))
         // .thread_name(format!("{}-", service.name))
         .build()
         .expect("failed to create tokio runtime");
@@ -118,7 +118,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                         error!("protocol not support");
                         exit(1)
                         //Err("protocol not support".into())
-
                     }
                 }
             }
@@ -146,11 +145,8 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
     let request_handler = |mut req: Request<Incoming>| {
         let service_arc = service.clone();
         async move {
-            let mut r_builder = Request::builder()
-                .method(req.method())
-                .uri(req.uri());
+            let mut r_builder = Request::builder().method(req.method()).uri(req.uri());
             // uri mapping 查找
-
 
             for (k, v) in req.headers().iter() {
                 r_builder = match k {
@@ -200,21 +196,24 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-async fn handler_request(mut request: Request<Incoming>,) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
+async fn handler_request(
+    mut request: Request<Incoming>,
+) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
     let response = Response::builder()
         .header(header::CONTENT_TYPE, "text/plain")
         .body(Full::new(Bytes::from("Hello, world!\n")).boxed())
         .expect("values provided to the builder should be valid");
 
     Ok(response)
-
 }
 
 async fn get_target_stream(target: &str) -> stdio::Result<SocketStream> {
     SocketStream::connect(target.to_string()).await
 }
 
-async fn get_target(target: &str) -> Result<SendRequest<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+async fn get_target(
+    target: &str,
+) -> Result<SendRequest<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
     let stream = get_target_stream(target).await?;
     let io = TokioIo::new(stream);
 

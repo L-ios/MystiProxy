@@ -46,7 +46,6 @@ pub struct Service {
     pub header: Option<HashMap<String, String>>,
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub service: Vec<Service>,
