@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-
 use clap::Parser;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -9,7 +8,6 @@ pub struct CliArg {
     /// target socket
     ///
     /// 目标的uds文件
-    // #[clap(&str)]
     #[arg(short, long, default_value = None)]
     pub target: Option<String>,
 

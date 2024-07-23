@@ -32,6 +32,7 @@ pub struct UriMapping {
 struct UriVariable {
     name: String,
     pattern: Option<String>,
+    regex: Regex,
     index: usize,
 }
 
@@ -98,8 +99,9 @@ impl UriMapping {
             };
             let variable = UriVariable {
                 name: variable_name.to_string(),
-                pattern,
-                index,
+                pattern: pattern,
+                regex: Regex::new(regex.as_str()).unwrap(),
+                index: index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
             index += 1;
@@ -123,7 +125,6 @@ impl UriMapping {
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
     fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
-        todo!("前缀匹配，一定以/进行结尾");
         match self.uri.as_ref() {
             None => None,
             Some(uri) => {
@@ -209,16 +210,15 @@ impl UriMapping {
                 todo!("判断一下，再处理")
                 //Some(in_uri.replace(self.uri.unwrap().clone().as_str(), self.target_uri.unwrap().as_str()))
             }
+            UriMatch::Exact => Some(in_uri.to_string()),
+            UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
                 let in_map = Self::uri_variable(base_uri);
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in &in_map {
-                    processed_base_uri = processed_base_uri.replace(
-                        &regex_pattern.origin(),
-                        &format!(r"({})", regex_pattern.to_pattern()),
-                    );
+                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.regex.as_str()));
                 }
 
                 // 构造正则表达式并尝试匹配
