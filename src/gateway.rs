@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::ops::Index;
-
+use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -128,7 +128,7 @@ impl UriMapping {
         match self.uri.as_ref() {
             None => None,
             Some(uri) => {
-                println!("uri: {}, in_uri: {}", uri, in_uri);
+                debug!("uri: {}, in_uri: {}", uri, in_uri);
                 let base_uri = uri.as_str();
                 // 精确匹配
                 if uri == in_uri {
@@ -174,7 +174,7 @@ impl UriMapping {
                             match cap.get(i) {
                                 None => {}
                                 Some(matchs) => {
-                                    println!("{}: {}", i, matchs.as_str());
+                                    debug!("{}: {}", i, matchs.as_str());
                                     match_var.insert(i, matchs.as_str().to_string());
                                     end = matchs.end();
                                 }
@@ -203,22 +203,22 @@ impl UriMapping {
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
             UriMatch::Exact => {
-                todo!("重新处理")
-                //Some(*self.target_uri.clone());
+                self.target_uri.clone()
             }
             UriMatch::Prefix => {
-                todo!("判断一下，再处理")
-                //Some(in_uri.replace(self.uri.unwrap().clone().as_str(), self.target_uri.unwrap().as_str()))
+                Some(in_uri.replace(self.uri.clone().unwrap().as_str(), self.target_uri.clone().unwrap().as_str()))
             }
-            UriMatch::Exact => Some(in_uri.to_string()),
-            UriMatch::Prefix => Some(in_uri.to_string()),
+            // UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
                 let in_map = Self::uri_variable(base_uri);
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = base_uri.to_string();
                 for (_, regex_pattern) in &in_map {
-                    processed_base_uri = processed_base_uri.replace(&regex_pattern.origin(), &format!(r"({})", regex_pattern.regex.as_str()));
+                    processed_base_uri = processed_base_uri.replace(
+                        &regex_pattern.origin(),
+                        &format!(r"({})", regex_pattern.to_pattern().as_str()),
+                    );
                 }
 
                 // 构造正则表达式并尝试匹配
@@ -264,8 +264,8 @@ impl UriMapping {
         D: Deserializer<'de>,
     {
         match String::deserialize(deserializer) {
-            Ok(methos) => Ok(methos
-                .split(",")
+            Ok(mtd) => Ok(mtd
+                .split(&[',', '|'])
                 .map(|method| method.to_uppercase().to_string())
                 .collect()),
             Err(err) => Err(err),
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn it_works() {
         let mapping_string = r#"{
-  "method": "GET,POST,put,*",
+  "method": "GET,POST|put,*",
   "mode": "Full",
   "service": "test",
   "target_protocol": "http",
@@ -296,15 +296,9 @@ mod tests {
   "var_pattern": "test"
 }"#;
         let mut mapping = serde_json::from_str::<UriMapping>(mapping_string).unwrap();
-        // mapping.method = vec!["GET".to_string(), "OPTIONS".to_string()];
-        // mapping.method = Some("GET".to_string());
-        println!("{:?}", mapping);
-        println!(
-            "serialized json: {}",
-            serde_json::to_string(&mapping).unwrap()
-        );
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+        assert_eq!(mapping.method, vec!["GET", "POST", "PUT", "*"]);
+        assert_eq!(mapping.mode, Some("Full".to_string()));
+        assert_eq!(mapping.service, Some("test".to_string()));
     }
 
     #[test_case("/", "/" => Some(UriMatch::Exact); "1. exact match")]
