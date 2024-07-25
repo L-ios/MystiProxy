@@ -7,11 +7,12 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct UriMapping {
     #[serde(
+        rename = "method",
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "UriMapping::serialize_method",
         deserialize_with = "UriMapping::deserialize_method"
     )]
-    method: Vec<String>, // GET, POST, PUT, DELETE, etc
+    methods: Vec<String>, // GET, POST, PUT, DELETE, etc
     #[serde(skip_serializing_if = "Option::is_none")]
     mode: Option<String>, // Full
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -66,11 +67,11 @@ enum UriMatch {
 
 impl UriMapping {
     fn supports_method(&self, method: &str) -> bool {
-        for m in &self.method {
-            if m.eq("*") {
+        for mtd in &self.methods {
+            if mtd.eq("*") {
                 return true;
             }
-            if m.to_uppercase() == method.to_uppercase() {
+            if mtd.eq_ignore_ascii_case(method) {
                 return true;
             }
         }
@@ -78,30 +79,28 @@ impl UriMapping {
     }
 
     fn uri_variable(uri: &str) -> HashMap<String, UriVariable> {
-        let re = Regex::new(r"/\{(\w+):?([^}]*)\}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
+        let re = Regex::new(r"/\{(\w+):?([^}]*)}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
         let mut variable_patterns = HashMap::new();
         let mut index = 1;
         for cap in re.captures_iter(uri) {
-            let variable_name = &cap[1];
             // 如果没有提供正则，则默认匹配非斜杠字符
-            let (pattern, regex) = match cap.get(2) {
-                None => (None, "\\w+".to_string()),
-                Some(matchs) => {
-                    if matchs.as_str().len() == 0 {
-                        (None, "\\w+".to_string())
-                    } else {
-                        (
-                            Some(matchs.as_str().to_string()),
-                            matchs.as_str().to_string(),
-                        )
-                    }
+            let (pattern, regex) = if let Some(matched)  = cap.get(2) {
+                if matched.is_empty() {
+                    (None, "\\w+")
+                } else {
+                    (
+                        Some(matched.as_str().to_string()),
+                        matched.as_str()
+                    )
                 }
+            } else {
+                (None, "\\w+")
             };
             let variable = UriVariable {
-                name: variable_name.to_string(),
-                pattern: pattern,
-                regex: Regex::new(regex.as_str()).unwrap(),
-                index: index,
+                name: (&cap[1]).to_string(),
+                pattern,
+                regex: Regex::new(regex).unwrap(),
+                index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
             index += 1;
@@ -171,28 +170,24 @@ impl UriMapping {
 
                     for cap in regex.captures_iter(in_uri) {
                         for i in 1..cap.len() {
-                            match cap.get(i) {
-                                None => {}
-                                Some(matchs) => {
-                                    debug!("{}: {}", i, matchs.as_str());
-                                    match_var.insert(i, matchs.as_str().to_string());
-                                    end = matchs.end();
-                                }
+                            if let Some(matchs) = cap.get(i) {
+                                debug!("{}: {}", i, matchs.as_str());
+                                match_var.insert(i, matchs.as_str().to_string());
+                                end = matchs.end();
                             }
                         }
                     }
-                    return match in_uri.get(0..end) {
-                        None => None,
-                        Some(mactched) => {
-                            if mactched.len() == in_uri.len()
-                                || (mactched.len() + 1 == in_uri.len() && in_uri.ends_with("/"))
-                            {
-                                Some(UriMatch::Variable)
-                            } else {
-                                Some(UriMatch::VariablePrefix)
-                            }
+                    if let Some(matched) = in_uri.get(0..end) {
+                        if matched.len() == in_uri.len()
+                            || (matched.len() + 1 == in_uri.len() && in_uri.ends_with("/"))
+                        {
+                            Some(UriMatch::Variable)
+                        } else {
+                            Some(UriMatch::VariablePrefix)
                         }
-                    };
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -263,13 +258,13 @@ impl UriMapping {
     where
         D: Deserializer<'de>,
     {
-        match String::deserialize(deserializer) {
-            Ok(mtd) => Ok(mtd
-                .split(&[',', '|'])
+        String::deserialize(deserializer).map(|mtds| {
+            let mut mtds = mtds.split(&[',', '|'])
                 .map(|method| method.to_uppercase().to_string())
-                .collect()),
-            Err(err) => Err(err),
-        }
+                .collect::<Vec<String>>();
+            mtds.sort();
+            mtds
+        })
     }
     fn serialize_method<S>(methods: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -284,7 +279,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn uri_mapping_serialize() {
         let mapping_string = r#"{
   "method": "GET,POST|put,*",
   "mode": "Full",
@@ -296,7 +291,7 @@ mod tests {
   "var_pattern": "test"
 }"#;
         let mut mapping = serde_json::from_str::<UriMapping>(mapping_string).unwrap();
-        assert_eq!(mapping.method, vec!["GET", "POST", "PUT", "*"]);
+        assert_eq!(mapping.methods, vec!["*", "GET", "POST", "PUT"]);
         assert_eq!(mapping.mode, Some("Full".to_string()));
         assert_eq!(mapping.service, Some("test".to_string()));
     }
