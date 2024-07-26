@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use clap::Parser;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -31,7 +31,7 @@ pub struct CliArg {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Service {
+pub struct MystiEngine {
     pub name: String,
     pub listen: String,
     pub target: String,
@@ -46,5 +46,5 @@ pub struct Service {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub service: Vec<Service>,
+    pub service: Vec<MystiEngine>,
 }

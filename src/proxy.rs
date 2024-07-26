@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::io;
 
-use crate::io::{SocketStream, StreamListener};
 use futures::FutureExt;
-use tokio::io::{copy_bidirectional, AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncWrite, copy_bidirectional};
+
+use crate::io::{SocketStream, StreamListener};
 
 pub trait Proxy {
     async fn proxy<A, B>(&self, a: &mut A, b: &mut B) -> io::Result<(u64, u64)>

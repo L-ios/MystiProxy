@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::ops::Index;
 use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+use std::ops::Index;
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct UriMapping {
@@ -84,14 +84,11 @@ impl UriMapping {
         let mut index = 1;
         for cap in re.captures_iter(uri) {
             // 如果没有提供正则，则默认匹配非斜杠字符
-            let (pattern, regex) = if let Some(matched)  = cap.get(2) {
+            let (pattern, regex) = if let Some(matched) = cap.get(2) {
                 if matched.is_empty() {
                     (None, "\\w+")
                 } else {
-                    (
-                        Some(matched.as_str().to_string()),
-                        matched.as_str()
-                    )
+                    (Some(matched.as_str().to_string()), matched.as_str())
                 }
             } else {
                 (None, "\\w+")
@@ -197,12 +194,11 @@ impl UriMapping {
 
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
-            UriMatch::Exact => {
-                self.target_uri.clone()
-            }
-            UriMatch::Prefix => {
-                Some(in_uri.replace(self.uri.clone().unwrap().as_str(), self.target_uri.clone().unwrap().as_str()))
-            }
+            UriMatch::Exact => self.target_uri.clone(),
+            UriMatch::Prefix => Some(in_uri.replace(
+                self.uri.clone().unwrap().as_str(),
+                self.target_uri.clone().unwrap().as_str(),
+            )),
             // UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
@@ -259,7 +255,8 @@ impl UriMapping {
         D: Deserializer<'de>,
     {
         String::deserialize(deserializer).map(|mtds| {
-            let mut mtds = mtds.split(&[',', '|'])
+            let mut mtds = mtds
+                .split(&[',', '|'])
                 .map(|method| method.to_uppercase().to_string())
                 .collect::<Vec<String>>();
             mtds.sort();
