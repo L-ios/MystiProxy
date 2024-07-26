@@ -32,10 +32,12 @@ impl Service<Request<IncomingBody>> for Engine {
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn call(&self, req: Request<IncomingBody>) -> Self::Future {
+        let e_clone = self.engine.clone();
         Box::pin(async move {
             let rb = req.collect().await.unwrap().to_bytes();
             let response = Response::builder()
                 .header(header::CONTENT_TYPE, "text/plain")
+                .header("x-mysti-name", e_clone.name.as_str())
                 .body(Full::new(rb))
                 .expect("values provided to the builder should be valid");
 
