@@ -1,7 +1,6 @@
-use std::collections::HashMap;
-
 use clap::Parser;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -9,7 +8,6 @@ pub struct CliArg {
     /// target socket
     ///
     /// 目标的uds文件
-    // #[clap(&str)]
     #[arg(short, long, default_value = None)]
     pub target: Option<String>,
 
@@ -33,7 +31,7 @@ pub struct CliArg {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Service {
+pub struct MystiEngine {
     pub name: String,
     pub listen: String,
     pub target: String,
@@ -48,5 +46,5 @@ pub struct Service {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub service: Vec<Service>,
+    pub service: Vec<MystiEngine>,
 }

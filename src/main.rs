@@ -3,45 +3,35 @@
 extern crate test_case;
 extern crate core;
 
-use bytes::Bytes;
 use chrono::Utc;
-use std::convert::Infallible;
 use std::fs::File;
-use std::io as stdio;
-use std::io::{BufReader, Stderr, Write};
-use std::net::ToSocketAddrs;
+use std::io::{BufReader, Write};
 use std::process::exit;
 use std::sync::Arc;
-use std::{result, thread};
+use std::{ thread};
 
 use clap::Parser;
 use env_logger::Env;
 use futures::future::join_all;
-use futures::FutureExt;
-use http_body_util::combinators::BoxBody;
-use http_body_util::{BodyExt, Full};
-use hyper::body::Incoming;
-use hyper::client::conn::http1::{Builder, SendRequest};
-use hyper::server::conn::http1;
-use hyper::service::service_fn;
-use hyper::{header, Request, Response};
 use hyper_util::rt::TokioExecutor;
 use hyper_util::{
     rt::TokioIo,
     server::{conn::auto::Builder as ServerAutoBuilder, graceful::GracefulShutdown},
 };
 use log::{error, info};
-use tokio::runtime::Runtime;
 
-use crate::arg::{CliArg, Config, Service};
-use crate::gateway::UriMapping;
-use crate::io::{SocketStream, StreamListener};
+use crate::arg::{CliArg, Config, MystiEngine};
+use crate::engine::Engine;
+use crate::io::{ StreamListener};
 
 mod arg;
+mod engine;
 mod gateway;
 mod io;
 mod mocker;
 mod proxy;
+mod tls;
+mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -75,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
         config.service
     } else {
-        vec![Service {
+        vec![MystiEngine {
             name: "default".to_string(),
             listen: match cli_arg.listen.clone() {
                 None => "127.0.0.1:3000".to_string(),
@@ -129,7 +119,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     Ok(())
 }
 
-async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error::Error + Send>> {
+async fn uds_http_proxy(
+    service: Arc<MystiEngine>,
+) -> Result<(), Box<dyn std::error::Error + Send>> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
         .enable_io()
@@ -141,28 +133,8 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
     info!("uds http proxy start: {}", service.listen);
 
     let graceful = GracefulShutdown::new();
-
-    let request_handler = |mut req: Request<Incoming>| {
-        let service_arc = service.clone();
-        async move {
-            let mut r_builder = Request::builder().method(req.method()).uri(req.uri());
-            // uri mapping 查找
-
-            for (k, v) in req.headers().iter() {
-                r_builder = match k {
-                    &hyper::header::HOST => r_builder.header(hyper::header::HOST, "localhost"),
-                    _ => r_builder.header(k, v),
-                };
-            }
-
-            let request = r_builder.body(req.into_body()).unwrap();
-            let mut sender = get_target(service_arc.target.as_str()).await.unwrap();
-            sender.send_request(request).await
-        }
-    };
-
+    let engine = Engine::new(service.clone());
     let server = ServerAutoBuilder::new(TokioExecutor::new());
-
     loop {
         tokio::select! {
             conn = listener.accept() => {
@@ -174,9 +146,8 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
                     }
                 };
                 info!("connect from {}", con);
-
-                let conn = server.serve_connection_with_upgrades(TokioIo::new(Box::pin(stream)), service_fn(handler_request));
-
+                let e_clone = engine.clone();
+                let conn = server.serve_connection_with_upgrades(TokioIo::new(Box::pin(stream)), e_clone);
                 let conn = graceful.watch(conn.into_owned());
                 runtime.spawn(async move {
                     if let Err(err) = conn.await {
@@ -194,48 +165,6 @@ async fn uds_http_proxy(service: Arc<Service>) -> Result<(), Box<dyn std::error:
         }
     }
     Ok(())
-}
-
-async fn handler_request(
-    mut request: Request<Incoming>,
-) -> Result<Response<BoxBody<Bytes, Infallible>>, Infallible> {
-    let response = Response::builder()
-        .header(header::CONTENT_TYPE, "text/plain")
-        .body(Full::new(Bytes::from("Hello, world!\n")).boxed())
-        .expect("values provided to the builder should be valid");
-
-    Ok(response)
-}
-
-async fn get_target_stream(target: &str) -> stdio::Result<SocketStream> {
-    SocketStream::connect(target.to_string()).await
-}
-
-async fn get_target(
-    target: &str,
-) -> Result<SendRequest<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
-    let stream = get_target_stream(target).await?;
-    let io = TokioIo::new(stream);
-
-    // Create the Hyper client
-    let (sender, conn) = Builder::new()
-        .preserve_header_case(true)
-        .title_case_headers(true)
-        .handshake(io)
-        .await?;
-
-    // Spawn a task to poll the connection, driving the HTTP state
-    tokio::task::spawn(async move {
-        if let Err(err) = conn.await {
-            println!("Connection failed: {:?}", err);
-        }
-    });
-    return Ok(sender);
-}
-
-pub fn loadcert(content: &[u8]) -> std::io::Result<Vec<Vec<u8>>> {
-    //Cuesor BufReader certs
-    todo!("not support")
 }
 
 #[cfg(test)]

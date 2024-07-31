@@ -1,17 +1,18 @@
-use std::collections::HashMap;
-use std::ops::Index;
-
+use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
+use std::ops::Index;
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct UriMapping {
     #[serde(
+        rename = "method",
         skip_serializing_if = "Vec::is_empty",
         serialize_with = "UriMapping::serialize_method",
         deserialize_with = "UriMapping::deserialize_method"
     )]
-    method: Vec<String>, // GET, POST, PUT, DELETE, etc
+    methods: Vec<String>, // GET, POST, PUT, DELETE, etc
     #[serde(skip_serializing_if = "Option::is_none")]
     mode: Option<String>, // Full
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,6 +33,7 @@ pub struct UriMapping {
 struct UriVariable {
     name: String,
     pattern: Option<String>,
+    regex: Regex,
     index: usize,
 }
 
@@ -65,11 +67,11 @@ enum UriMatch {
 
 impl UriMapping {
     fn supports_method(&self, method: &str) -> bool {
-        for m in &self.method {
-            if m.eq("*") {
+        for mtd in &self.methods {
+            if mtd.eq("*") {
                 return true;
             }
-            if m.to_uppercase() == method.to_uppercase() {
+            if mtd.eq_ignore_ascii_case(method) {
                 return true;
             }
         }
@@ -77,28 +79,24 @@ impl UriMapping {
     }
 
     fn uri_variable(uri: &str) -> HashMap<String, UriVariable> {
-        let re = Regex::new(r"/\{(\w+):?([^}]*)\}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
+        let re = Regex::new(r"/\{(\w+):?([^}]*)}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
         let mut variable_patterns = HashMap::new();
         let mut index = 1;
         for cap in re.captures_iter(uri) {
-            let variable_name = &cap[1];
             // 如果没有提供正则，则默认匹配非斜杠字符
-            let (pattern, regex) = match cap.get(2) {
-                None => (None, "\\w+".to_string()),
-                Some(matchs) => {
-                    if matchs.as_str().len() == 0 {
-                        (None, "\\w+".to_string())
-                    } else {
-                        (
-                            Some(matchs.as_str().to_string()),
-                            matchs.as_str().to_string(),
-                        )
-                    }
+            let (pattern, regex) = if let Some(matched) = cap.get(2) {
+                if matched.is_empty() {
+                    (None, "\\w+")
+                } else {
+                    (Some(matched.as_str().to_string()), matched.as_str())
                 }
+            } else {
+                (None, "\\w+")
             };
             let variable = UriVariable {
-                name: variable_name.to_string(),
+                name: (&cap[1]).to_string(),
                 pattern,
+                regex: Regex::new(regex).unwrap(),
                 index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
@@ -123,11 +121,10 @@ impl UriMapping {
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
     fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
-        todo!("前缀匹配，一定以/进行结尾");
         match self.uri.as_ref() {
             None => None,
             Some(uri) => {
-                println!("uri: {}, in_uri: {}", uri, in_uri);
+                debug!("uri: {}, in_uri: {}", uri, in_uri);
                 let base_uri = uri.as_str();
                 // 精确匹配
                 if uri == in_uri {
@@ -170,28 +167,24 @@ impl UriMapping {
 
                     for cap in regex.captures_iter(in_uri) {
                         for i in 1..cap.len() {
-                            match cap.get(i) {
-                                None => {}
-                                Some(matchs) => {
-                                    println!("{}: {}", i, matchs.as_str());
-                                    match_var.insert(i, matchs.as_str().to_string());
-                                    end = matchs.end();
-                                }
+                            if let Some(matchs) = cap.get(i) {
+                                debug!("{}: {}", i, matchs.as_str());
+                                match_var.insert(i, matchs.as_str().to_string());
+                                end = matchs.end();
                             }
                         }
                     }
-                    return match in_uri.get(0..end) {
-                        None => None,
-                        Some(mactched) => {
-                            if mactched.len() == in_uri.len()
-                                || (mactched.len() + 1 == in_uri.len() && in_uri.ends_with("/"))
-                            {
-                                Some(UriMatch::Variable)
-                            } else {
-                                Some(UriMatch::VariablePrefix)
-                            }
+                    if let Some(matched) = in_uri.get(0..end) {
+                        if matched.len() == in_uri.len()
+                            || (matched.len() + 1 == in_uri.len() && in_uri.ends_with("/"))
+                        {
+                            Some(UriMatch::Variable)
+                        } else {
+                            Some(UriMatch::VariablePrefix)
                         }
-                    };
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 }
@@ -201,14 +194,12 @@ impl UriMapping {
 
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
-            UriMatch::Exact => {
-                todo!("重新处理")
-                //Some(*self.target_uri.clone());
-            }
-            UriMatch::Prefix => {
-                todo!("判断一下，再处理")
-                //Some(in_uri.replace(self.uri.unwrap().clone().as_str(), self.target_uri.unwrap().as_str()))
-            }
+            UriMatch::Exact => self.target_uri.clone(),
+            UriMatch::Prefix => Some(in_uri.replace(
+                self.uri.clone().unwrap().as_str(),
+                self.target_uri.clone().unwrap().as_str(),
+            )),
+            // UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let base_uri = self.uri.as_ref().unwrap();
                 let in_map = Self::uri_variable(base_uri);
@@ -217,7 +208,7 @@ impl UriMapping {
                 for (_, regex_pattern) in &in_map {
                     processed_base_uri = processed_base_uri.replace(
                         &regex_pattern.origin(),
-                        &format!(r"({})", regex_pattern.to_pattern()),
+                        &format!(r"({})", regex_pattern.to_pattern().as_str()),
                     );
                 }
 
@@ -263,13 +254,14 @@ impl UriMapping {
     where
         D: Deserializer<'de>,
     {
-        match String::deserialize(deserializer) {
-            Ok(methos) => Ok(methos
-                .split(",")
+        String::deserialize(deserializer).map(|mtds| {
+            let mut mtds = mtds
+                .split(&[',', '|'])
                 .map(|method| method.to_uppercase().to_string())
-                .collect()),
-            Err(err) => Err(err),
-        }
+                .collect::<Vec<String>>();
+            mtds.sort();
+            mtds
+        })
     }
     fn serialize_method<S>(methods: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -284,9 +276,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn uri_mapping_serialize() {
         let mapping_string = r#"{
-  "method": "GET,POST,put,*",
+  "method": "GET,POST|put,*",
   "mode": "Full",
   "service": "test",
   "target_protocol": "http",
@@ -296,15 +288,9 @@ mod tests {
   "var_pattern": "test"
 }"#;
         let mut mapping = serde_json::from_str::<UriMapping>(mapping_string).unwrap();
-        // mapping.method = vec!["GET".to_string(), "OPTIONS".to_string()];
-        // mapping.method = Some("GET".to_string());
-        println!("{:?}", mapping);
-        println!(
-            "serialized json: {}",
-            serde_json::to_string(&mapping).unwrap()
-        );
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+        assert_eq!(mapping.methods, vec!["*", "GET", "POST", "PUT"]);
+        assert_eq!(mapping.mode, Some("Full".to_string()));
+        assert_eq!(mapping.service, Some("test".to_string()));
     }
 
     #[test_case("/", "/" => Some(UriMatch::Exact); "1. exact match")]
