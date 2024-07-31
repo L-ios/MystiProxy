@@ -88,6 +88,19 @@
     - [ ] 提供body模版，然后特殊处理后，再进行响应
       - 例如结合一些请求转发的能力，将mock的能力进行提升
 
+#+begin_src yaml
+  mysti
+    engine: {}
+
+  # 证书 单独声明,engine中进行引用啊
+  cert: {}
+#+end_src
+
+#+begin_src plantuml
+  @startuml
+  class Engine
+  @enduml
+#+end_src
 * Footnotes
 
 [fn:1] unix中也可以传输 https 协议的内容，https，主要是tcp socket上将其通过tls进行加密
