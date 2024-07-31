@@ -1,7 +1,9 @@
 use std::io;
 
 use futures::FutureExt;
-use tokio::io::{AsyncRead, AsyncWrite, copy_bidirectional};
+use tokio::io::{copy_bidirectional, AsyncRead, AsyncWrite};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 
 use crate::io::{SocketStream, StreamListener};
 

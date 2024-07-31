@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::process::exit;
 use std::sync::Arc;
-use std::{ thread};
+use std::thread;
 
 use clap::Parser;
 use env_logger::Env;
@@ -18,11 +18,12 @@ use hyper_util::{
     rt::TokioIo,
     server::{conn::auto::Builder as ServerAutoBuilder, graceful::GracefulShutdown},
 };
+use tokio::runtime::{Builder as RuntimeBuilder};
 use log::{error, info};
-
+use tokio::task::JoinHandle;
 use crate::arg::{CliArg, Config, MystiEngine};
 use crate::engine::Engine;
-use crate::io::{ StreamListener};
+use crate::io::StreamListener;
 
 mod arg;
 mod engine;
@@ -33,8 +34,10 @@ mod proxy;
 mod tls;
 mod utils;
 
+type MainError = Box<dyn std::error::Error + Send + Sync>;
+
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn main() -> Result<(), MainError> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info"))
         .format(|buf, record| {
             writeln!(
@@ -88,32 +91,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }]
     };
 
-    let mut handles = vec![];
     // fix 当前for循环存在问题
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_time()
-        .enable_io()
+    let runtime = RuntimeBuilder::new_multi_thread()
+        .enable_all()
         .thread_name_fn(|| format!("odd-"))
-        // .thread_name(format!("{}-", service.name))
         .build()
         .expect("failed to create tokio runtime");
 
-    // let services = Box::new(services);
-    for service in services {
-        let handler = runtime.spawn({
+    let handles = services.into_iter().map(|service| {
+        runtime.spawn({
             async move {
-                match service.protocol.as_str() {
+                let _ = match service.protocol.as_str() {
                     "http" => uds_http_proxy(Arc::new(service)).await,
                     _ => {
                         error!("protocol not support");
                         exit(1)
                         //Err("protocol not support".into())
                     }
-                }
+                };
             }
-        });
-        handles.push(handler);
-    } // 此处销毁runtime，会存在问题
+        })
+    }).collect::<Vec<JoinHandle<()>>>();
+
     join_all(handles).await;
 
     Ok(())
@@ -122,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn uds_http_proxy(
     service: Arc<MystiEngine>,
 ) -> Result<(), Box<dyn std::error::Error + Send>> {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
+    let runtime = RuntimeBuilder::new_multi_thread()
         .worker_threads(4)
         .enable_io()
         .thread_name(format!("{}-proxy-", service.name))

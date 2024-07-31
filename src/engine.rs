@@ -4,11 +4,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
 use http_body_util::combinators::BoxBody;
-use hyper::{body::Incoming as IncomingBody, header, Request, Response};
+use http_body_util::{BodyExt, Full};
 use hyper::client::conn::http2::{Builder, SendRequest};
 use hyper::service::Service;
+use hyper::{body::Incoming as IncomingBody, header, Request, Response};
 use hyper_util::rt::TokioExecutor;
 use hyper_util::rt::TokioIo;
 
