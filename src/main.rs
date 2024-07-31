@@ -233,5 +233,10 @@ async fn get_target(
     return Ok(sender);
 }
 
+pub fn loadcert(content: &[u8]) -> std::io::Result<Vec<Vec<u8>>> {
+    //Cuesor BufReader certs
+    todo!("not support")
+}
+
 #[cfg(test)]
 mod tests {}
