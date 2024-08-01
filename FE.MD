@@ -1,0 +1,35 @@
+```plantuml
+   @startuml
+   * MystiProxy
+   ** 监听方式
+   *** tcp
+   *** uds
+   ** 对外提供的能力
+   *** 4 层 socket 转发
+   *** 7 层 http 转发
+   ** 通道鉴权能力
+   *** 4 层 tls
+   **** 单向鉴权
+   **** 双向鉴权
+   *** 7 层鉴权
+   **** 提供登录页面
+   **** header 鉴权
+   ***** auth
+   ***** jwt
+
+   * http 转发能力
+   ** proxy 能力
+   ** 静态私服
+   ** dav文件服务看
+   ** 请求mock
+   *** 提供healthcheck
+   *** 根据条件mock
+   ** 网关能力
+   *** /abc 映射为 /
+   *** /a/b/c 映射为 /a/c/b
+
+   * mock能力
+
+   * 网关能力
+    @enduml
+```
