@@ -2,7 +2,7 @@
 
   主要解决，服务迁移到，导致一系列调试，中间态的问题，验证方式，一开始主要是为了观察docker等以uds文件进行通行的应用
 * 主要功能
-  #+begin_src org
+  #+begin_src plantuml
     @startuml
     ,* MystiProxy
     ,** 监听方式
@@ -123,18 +123,105 @@
     - [ ] 提供body模版，然后特殊处理后，再进行响应
       - 例如结合一些请求转发的能力，将mock的能力进行提升
 
-#+begin_src yaml
-  mysti
-    engine: {}
+* 配置文件结构
+#+begin_src plantuml
+  @startyaml
+  mysti:
+    engine:
+      docker:
+        listen: tcp://0.0.0.0:3128
+        target: unix:///var/run/docker.sock
+        proxy_type: http # tcp
+        timeout: 10s
+        header:
+          Host:
+            value: localhost
+            action: 'overwrite' # 默认就是overwrite
+            condition: '' # 默认值为true，如果编写，则结果为true后，才能执行
+        locations:
+          - location: '/a/b'
+            mode: Prefix # 默认采用 【5. 前缀匹配 => Prefix】，支持【1. 全量匹配 => Exact】，【3. 正则匹配 => Regex】，【4. 变量前缀匹配=>VariablePrefix】，【2. 变量形式匹配=>Variable】
+
+            response:
+              status: 200
+              headers:
+                test:
+                  value: good
+              body:
+                type: static
+                alias: 'bbb'
+          request:
+            type: static
+          request:
+            method: 'get'
+            uri: # 可能需要定义为uriMapping
+              path: '/a/c'
+              query: 'a=b&c=d'
+            headers:
+              Host:
+                value: localhost
+                action: 'overwrite' # 默认值，强制复写
+                condition: '' # 条件，为true才会执行
+              forward-host:
+                value: localhost
+                action: 'missed' # 缺少，则添加
+              x-host:
+                action: 'forceDelete' # 有就删除
+            body: # 只支持json，并使用jsonpath进行处理
+              json:
+                 path: '$.name'
+                 value: 'test'
+                 action: 'overwrite'
+                 condition: ''
+          response:
+            headers:
+              Host:
+                value: localhost
+                action: 'overwrite' # 默认值，强制复写
+                condition: '' # 条件，为true才会执行
+            body:
+              json:
+                '$.name':
+                  value: 'test'
+                  action: 'overwrite'
+                  condition: ''
+      containerd:
+        listen: tcp://0.0.0.0:3128
+        target: tcp://127.0.0.1:2765
+        proxy_type: tcp
 
   # 证书 单独声明,engine中进行引用啊
-  cert: {}
+  cert:
+    - name: client1
+      root_key: ""
+    - {}
+  @endyaml
 #+end_src
-
 #+begin_src plantuml
-  @startuml
-  class Engine
-  @enduml
+  @startjson
+  [
+    {
+      "method": "GET,POST,put,*",
+      "mode": "Full",
+      "service": "test",
+      "target_protocol": "http",
+      "target_service": "test",
+      "target_uri": "http://127.0.0.1:8080",
+      "uri": "/test",
+      "var_pattern": "test"
+    },
+      {
+      "method": "GET,POST,put,*",
+      "mode": "Full",
+      "service": "test",
+      "target_protocol": "http",
+      "target_service": "test",
+      "target_uri": "http://127.0.0.1:8080",
+      "uri": "/test",
+      "var_pattern": "test"
+    }
+  ]
+  @endjson
 #+end_src
 * Footnotes
 
