@@ -12,13 +12,35 @@ pub struct UriMapping {
         serialize_with = "UriMapping::serialize_method",
         deserialize_with = "UriMapping::deserialize_method"
     )]
-    methods: Vec<String>, // GET, POST, PUT, DELETE, etc
+    /// GET, POST, PUT, DELETE. etc
+    methods: Vec<String>,
+    /// 根据/进行 split 然后进行最长的uri进行权重匹配
     uri: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     service: Option<String>,
     target_uri: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     target_service: Option<String>,
+}
+
+struct UriWeight {
+    item: Vec<Item>,
+    /// `/a/b/c` 的权重是3
+    ///
+    /// `/a/b/c/` 的权重是4
+    weight: usize,
+    variable_count: usize,
+}
+
+struct Item {
+    /// 名称，可能是变量名称
+    name: String,
+    /// 路径中的真实名称
+    real_name: String,
+    /// 正则变量的正则
+    pattern: Option<String>,
+    /// 路径中的第几个位置
+    index: usize,
 }
 
 #[derive(Debug)]
@@ -46,6 +68,16 @@ impl UriVariable {
     }
 }
 
+/// 简化后，实际上是不需要知道是什么匹配模式的
+///
+/// 提供模式策略，应该是在录入uri后，进行uri预处理的时候，进行提供
+///
+/// 1. 无变量
+///    a. 全量匹配
+///    b. 前缀匹配
+/// 2. 有变量
+///    a. 全量匹配
+///    b. 前缀匹配
 #[derive(PartialEq, Debug)]
 enum UriMatch {
     /// 全量匹配
@@ -55,6 +87,8 @@ enum UriMatch {
     /// 前缀匹配
     Prefix,
     /// 变量前缀匹配
+    ///
+    /// 兼容前缀匹配，也兼容带变量的形式进行前缀匹配
     VariablePrefix,
 }
 
@@ -114,7 +148,6 @@ impl UriMapping {
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
     fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
-
         debug!("uri: {}, in_uri: {}", self.uri, in_uri);
         let base_uri = self.uri.as_str();
         // 精确匹配
