@@ -33,6 +33,7 @@ mod mocker;
 mod proxy;
 mod tls;
 mod utils;
+mod k8s;
 
 type MainError = Box<dyn std::error::Error + Send + Sync>;
 
