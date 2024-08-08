@@ -1,5 +1,6 @@
+# 主要能力
 ```plantuml
-   @startuml
+   @startmindmap
    * MystiProxy
    ** 监听方式
    *** tcp
@@ -20,7 +21,7 @@
    * http 转发能力
    ** proxy 能力
    ** 静态私服
-   ** dav文件服务看
+   ** dav文件服务器
    ** 请求mock
    *** 提供healthcheck
    *** 根据条件mock
@@ -31,5 +32,34 @@
    * mock能力
 
    * 网关能力
-    @enduml
+    @endmindmap
+```
+
+## mapping的能力
+mapping主要能力如下：
+```plantuml
+@startyaml
+locations:
+  - location: /static/path
+    type: static
+  - location: /prefix/path
+    type: mapping
+    target: ""
+    mapping:
+      - method:  "GET,POST,put,*"
+        service: test
+        location: /mapping/path
+        target_service: "test"
+        location: "http://127.0.0.1:8080"
+      - method:  GET|POST
+        service: test
+        location: /mapping/path
+        target_service: "test"
+        location: "http://127.0.0.1:8080"
+      - method:  GET
+        service: "test"
+        location: /mapping/path
+        target_service: "test"
+        location: "http://127.0.0.1:8080"
+@endyaml
 ```
