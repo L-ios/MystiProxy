@@ -3,7 +3,7 @@
   主要解决，服务迁移到，导致一系列调试，中间态的问题，验证方式，一开始主要是为了观察docker等以uds文件进行通行的应用
 * 主要功能
   #+begin_src plantuml
-    @startuml
+    @startmindmap
     ,* MystiProxy
     ,** 监听方式
     ,*** tcp
@@ -35,7 +35,7 @@
     ,* mock能力
 
     ,* 网关能力
-    @enduml
+    @endmindmap
   #+end_src
   1. 用于转发4层协议
      - tcp
@@ -139,6 +139,7 @@
             action: 'overwrite' # 默认就是overwrite
             condition: '' # 默认值为true，如果编写，则结果为true后，才能执行
         locations:
+          # 采用网管的形式进行匹配，优先前缀匹配
           - location: '/a/b'
             mode: Prefix # 默认采用 【5. 前缀匹配 => Prefix】，支持【1. 全量匹配 => Exact】，【3. 正则匹配 => Regex】，【4. 变量前缀匹配=>VariablePrefix】，【2. 变量形式匹配=>Variable】
 
@@ -195,6 +196,26 @@
     - name: client1
       root_key: ""
     - {}
+  @endyaml
+#+end_src
+#+begin_src plantuml
+  @startyaml
+  - location: /a/b/c
+    mode: Prefix
+    provider: static # 静态私服
+    alias: /var/www/html/
+  - location: /a/b/d # 多种匹配模式，估计才行
+    provider: mock
+    condition:
+      - a: b
+      - b: c
+    - path: /a/b/d # 全量匹配
+      query: a=b&c=d # 需要动态匹配
+      method: get # 固定匹配
+      header:
+        auth:
+          value: good
+          condition: xxxx
   @endyaml
 #+end_src
 #+begin_src plantuml
