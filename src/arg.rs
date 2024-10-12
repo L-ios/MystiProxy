@@ -44,6 +44,13 @@ pub struct MystiEngine {
     pub header: Option<HashMap<String, String>>,
 }
 
+impl Default for MystiEngine {
+    fn default() -> Self {
+        todo!()
+    }
+}
+
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub service: Vec<MystiEngine>,

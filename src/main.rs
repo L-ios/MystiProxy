@@ -10,6 +10,9 @@ use std::process::exit;
 use std::sync::Arc;
 use std::thread;
 
+use crate::arg::{CliArg, Config, MystiEngine};
+use crate::engine::Engine;
+use crate::io::{SocketStream, StreamListener};
 use clap::Parser;
 use env_logger::Env;
 use futures::future::join_all;
@@ -18,22 +21,22 @@ use hyper_util::{
     rt::TokioIo,
     server::{conn::auto::Builder as ServerAutoBuilder, graceful::GracefulShutdown},
 };
-use tokio::runtime::{Builder as RuntimeBuilder};
 use log::{error, info};
+use tokio::io::copy_bidirectional;
+use tokio::runtime::Builder as RuntimeBuilder;
 use tokio::task::JoinHandle;
-use crate::arg::{CliArg, Config, MystiEngine};
-use crate::engine::Engine;
-use crate::io::StreamListener;
+
+use futures::FutureExt;
 
 mod arg;
 mod engine;
 mod gateway;
 mod io;
+mod k8s;
 mod mocker;
 mod proxy;
 mod tls;
 mod utils;
-mod k8s;
 
 type MainError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -83,7 +86,7 @@ async fn main() -> Result<(), MainError> {
                 Some(target) => target.to_string(),
             },
             protocol: match cli_arg.protocol.clone() {
-                None => "http".to_string(),
+                None => "tcp".to_string(),
                 Some(protocol) => protocol,
             },
             timeout: None,
@@ -99,23 +102,81 @@ async fn main() -> Result<(), MainError> {
         .build()
         .expect("failed to create tokio runtime");
 
-    let handles = services.into_iter().map(|service| {
-        runtime.spawn({
-            async move {
-                let _ = match service.protocol.as_str() {
-                    "http" => uds_http_proxy(Arc::new(service)).await,
-                    _ => {
-                        error!("protocol not support");
-                        exit(1)
-                        //Err("protocol not support".into())
-                    }
-                };
-            }
+    let handles = services
+        .into_iter()
+        .map(|service| {
+            runtime.spawn({
+                async move {
+                    let _ = match service.protocol.as_str() {
+                        "http" | "https" => uds_http_proxy(Arc::new(service)).await,
+                        "tcp" => stream_proxy(Arc::new(service)).await,
+                        _ => {
+                            error!("protocol not support");
+                            exit(1)
+                            //Err("protocol not support".into())
+                        }
+                    };
+                }
+            })
         })
-    }).collect::<Vec<JoinHandle<()>>>();
+        .collect::<Vec<JoinHandle<()>>>();
 
     join_all(handles).await;
 
+    Ok(())
+}
+
+async fn stream_proxy(service: Arc<MystiEngine>) -> Result<(), Box<dyn std::error::Error + Send>> {
+    let runtime = RuntimeBuilder::new_multi_thread()
+        .worker_threads(4)
+        .enable_io()
+        .thread_name(format!("{}-proxy-", service.name))
+        .build()
+        .expect("failed to create tokio runtime");
+
+    let listener = StreamListener::new(service.listen.clone()).await.unwrap();
+    info!("stream proxy start: {}", service.listen);
+
+    let graceful = GracefulShutdown::new();
+    let engine = Engine::new(service.clone());
+
+    loop {
+        tokio::select! {
+            conn = listener.accept() => {
+                let (mut inbound, con) = match conn {
+                    Ok(x) => x,
+                    Err(e) => {
+                        error!("failed to adccept connection: {e}");
+                        continue
+                    }
+                };
+
+                info!("connect from {}", con);
+                // runtime.spawn(async move {
+                //     if let Err(err) = conn.await {
+                //         eprintln!("connection error: {}", err);
+                //     }
+                //     eprintln!("connection dropped: {}", con);
+                // });
+
+                let mut outbound = SocketStream::connect(service.target.to_string()).await.expect("failed to connect");
+
+                copy_bidirectional(&mut inbound, &mut outbound)
+                .map(|r| {
+                    if let Err(e) = r {
+                        println!("Failed to transfer; error={}", e);
+                    }
+                })
+                .await
+            }
+        }
+    }
+
+    tokio::select! {
+        _ = graceful.shutdown() => {
+            info!("shutdown");
+        }
+    }
     Ok(())
 }
 
@@ -141,7 +202,7 @@ async fn uds_http_proxy(
                 let (stream, con) = match conn {
                     Ok(x) => x,
                     Err(e) => {
-                        error!("failed to adccept connection: {e}");
+                        error!("failed to accept connection: {e}");
                         continue
                     }
                 };

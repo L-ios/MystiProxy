@@ -4,7 +4,7 @@ use futures::prelude::*;
 use k8s_openapi::api::core::v1::Pod;
 use log::*;
 
-async fn demo() -> Result<(), Error> {
+pub async fn demo_k8s() -> Result<(), Error> {
     let client = Client::try_default().await?;
     let api = Api::<Pod>::default_namespaced(client);
     let use_watchlist = std::env::var("WATCHLIST").map(|s| s == "1").unwrap_or(false);
