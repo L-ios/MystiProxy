@@ -33,3 +33,6 @@ prost-types = "0.13"
 [dev-dependencies]
 test-case = "1"
 
+[build-dependencies]
+prost-build = "0.13.3"
+
