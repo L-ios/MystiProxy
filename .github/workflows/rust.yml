@@ -21,10 +21,12 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04
+            target: wasm32-unknown-emscripten
 #          - os: ubuntu-24.04-arm
 #            target: aarch64-unknown-linux-musl
-          - os: windows-latest
-            target: x86_64-pc-windows-gnu
+#          - os: windows-latest
+#            target: x86_64-pc-windows-gnu
     steps:
       - uses: actions/checkout@v4
       - name: Get Git Commit ID
@@ -35,6 +37,19 @@ jobs:
       - name: Install musl-tools (if needed)
         if: matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Install Emscripten (if needed)
+        if: matrix.target == 'wasm32-unknown-emscripten'
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          echo "EMSDK_PATH=$(pwd)" >> $GITHUB_ENV
+          echo "EMSDK_ENV=$(pwd)/emsdk_env.sh" >> $GITHUB_ENV
+      - name: Source Emscripten environment (if needed)
+        if: matrix.target == 'wasm32-unknown-emscripten'
+        run: source ${{ env.EMSDK_ENV }}
       - name: Build Release
         run: cargo build --release --target ${{ matrix.target }}
       - name: Archive Release Build as ZIP
