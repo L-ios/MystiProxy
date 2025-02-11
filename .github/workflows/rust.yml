@@ -44,7 +44,7 @@ jobs:
             zip -r mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
           fi
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip
           path: target/${{ inputs.target }}/release/mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip
