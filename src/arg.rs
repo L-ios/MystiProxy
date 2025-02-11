@@ -50,7 +50,6 @@ impl Default for MystiEngine {
     }
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub service: Vec<MystiEngine>,

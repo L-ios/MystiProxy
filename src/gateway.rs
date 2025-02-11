@@ -217,10 +217,7 @@ impl UriMapping {
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
             UriMatch::Exact => Some(self.target_uri.clone()),
-            UriMatch::Prefix => Some(in_uri.replace(
-                self.uri.as_str(),
-                self.target_uri.as_str(),
-            )),
+            UriMatch::Prefix => Some(in_uri.replace(self.uri.as_str(), self.target_uri.as_str())),
             // UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
                 let in_map = Self::uri_variable(self.uri.as_str());
@@ -234,7 +231,10 @@ impl UriMapping {
                 }
 
                 // 构造正则表达式并尝试匹配
-                let rest = Regex::new(&processed_base_uri).unwrap().replace(in_uri, "").to_string();
+                let rest = Regex::new(&processed_base_uri)
+                    .unwrap()
+                    .replace(in_uri, "")
+                    .to_string();
                 let regex = Regex::new(&format!("^{}\\/?.*$", processed_base_uri)).unwrap();
                 let mut match_var = HashMap::new();
 
@@ -267,7 +267,7 @@ impl UriMapping {
                     }
                 }
                 if rest.len() == 0 {
-                    return Some(target_uri)
+                    return Some(target_uri);
                 }
                 let rest = if rest.starts_with("/") {
                     &rest[1..]
@@ -275,7 +275,7 @@ impl UriMapping {
                     &rest
                 };
 
-                if target_uri.ends_with("/")  {
+                if target_uri.ends_with("/") {
                     Some(format!("{}{}", target_uri, rest))
                 } else {
                     Some(format!("{}/{}", target_uri, rest))
@@ -356,7 +356,11 @@ mod tests {
     "/api/users/123-456-789/records/456-789-123/abc" => Some("/record/456-789-123/user/123-456-789/abc".to_string()); "uuid in path with variable prefix target uri with slash end")]
     #[test_case("/api/users/{rid}/records/{id}/", "/record/{id}/user/{rid}",
     "/api/users/123-456-789/records/456-789-123/abc" => Some("/record/456-789-123/user/123-456-789/abc".to_string()); "uuid in path with variable prefix in uri with slash end")]
-    fn uri_matching_test(in_pattern_uri: &str, target_pattern_uri: &str, in_uri: &str) -> Option<String> {
+    fn uri_matching_test(
+        in_pattern_uri: &str,
+        target_pattern_uri: &str,
+        in_uri: &str,
+    ) -> Option<String> {
         let mut mapping = UriMapping::default();
         mapping.uri = in_pattern_uri.to_string();
         mapping.target_uri = target_pattern_uri.to_string();
@@ -365,6 +369,5 @@ mod tests {
         } else {
             None
         }
-
     }
 }

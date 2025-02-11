@@ -4,7 +4,6 @@ use futures::FutureExt;
 use tokio::io::{copy_bidirectional, AsyncRead, AsyncWrite};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-
 use crate::io::{SocketStream, StreamListener};
 
 pub trait Proxy {

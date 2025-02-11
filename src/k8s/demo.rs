@@ -1,4 +1,11 @@
-use kube::{api::{Api, ListParams, ResourceExt}, config, core::ObjectMeta, client::Client, runtime::{watcher, WatchStreamExt}, Error};
+use kube::{
+    api::{Api, ListParams, ResourceExt},
+    client::Client,
+    config,
+    core::ObjectMeta,
+    runtime::{watcher, WatchStreamExt},
+    Error,
+};
 
 use futures::prelude::*;
 use k8s_openapi::api::core::v1::Pod;
@@ -7,7 +14,9 @@ use log::*;
 pub async fn demo_k8s() -> Result<(), Error> {
     let client = Client::try_default().await?;
     let api = Api::<Pod>::default_namespaced(client);
-    let use_watchlist = std::env::var("WATCHLIST").map(|s| s == "1").unwrap_or(false);
+    let use_watchlist = std::env::var("WATCHLIST")
+        .map(|s| s == "1")
+        .unwrap_or(false);
     let wc = if use_watchlist {
         // requires WatchList feature gate on 1.27 or later
         watcher::Config::default().streaming_lists()

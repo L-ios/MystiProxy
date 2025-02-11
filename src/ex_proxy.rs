@@ -1,4 +1,3 @@
-
 use std::net::SocketAddr;
 
 use bytes::Bytes;
@@ -10,7 +9,6 @@ use hyper::upgrade::Upgraded;
 use hyper::{Method, Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::{TcpListener, TcpStream};
-
 
 // To try this example:
 // 1. cargo run --example http_proxy

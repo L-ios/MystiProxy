@@ -25,11 +25,6 @@ k8s-openapi = { version = "0.22.0", features = ["latest"] }
 # mock http servicea
 wiremock = "0.5"
 
-# protobuf deps
-prost = "0.13"
-# Only necessary if using Protobuf well-known types:
-prost-types = "0.13"
-
 [dev-dependencies]
 test-case = "1"
 
