@@ -10,27 +10,46 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build-linux-gnu:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        target: [ x86_64-unknown-linux-gnu, aarch64-unknown-linux-gnu ]
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Build Release
-      run: cargo build --release
-    - name: Get Git Commit ID
-      id: git_commit
-      run: echo "GIT_COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
-    - name: Archive Release Build as ZIP
-      run: |
-        cd target/release
-        zip -r mystiproxy-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+    - name: Install Rust toolchain
+      run: rustup target add ${{ matrix.target }}
+    - name: Build and Archive
+      uses: ./.github/workflows/build-and-archive.yml
       with:
-        name: mystiproxy-${{ env.GIT_COMMIT_ID }}.zip
-        path: target/release/mystiproxy-${{ env.GIT_COMMIT_ID }}.zip
+        target: ${{ matrix.target }}
+
+  build-linux-musl:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [ x86_64-unknown-linux-musl, aarch64-unknown-linux-musl ]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust toolchain
+      run: rustup target add ${{ matrix.target }}
+    - name: Install musl-tools
+      run: sudo apt-get update && sudo apt-get install -y musl-tools
+    - name: Build and Archive
+      uses: ./.github/workflows/build-and-archive.yml
+      with:
+        target: ${{ matrix.target }}
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [ x86_64-pc-windows-gnu ]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Rust toolchain
+      run: rustup target add ${{ matrix.target }}
+    - name: Build and Archive
+      uses: ./.github/workflows/build-and-archive.yml
+      with:
+        target: ${{ matrix.target }}
