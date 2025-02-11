@@ -22,3 +22,15 @@ jobs:
       run: cargo test --verbose
     - name: Build Release
       run: cargo build --release
+    - name: Get Git Commit ID
+      id: git_commit
+      run: echo "GIT_COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
+    - name: Archive Release Build as ZIP
+      run: |
+        cd target/release
+        zip -r mystiproxy-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: mystiproxy-${{ env.GIT_COMMIT_ID }}.zip
+        path: target/release/mystiproxy-${{ env.GIT_COMMIT_ID }}.zip
