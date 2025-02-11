@@ -11,6 +11,7 @@ jobs:
   build-and-archive:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
     - name: Get Git Commit ID
       id: git_commit
       run: echo "GIT_COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
