@@ -14,37 +14,39 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:
-          - ubuntu-latest
-          - windows-latest
-        target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
-          - x86_64-pc-windows-gnu
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
     steps:
       - uses: actions/checkout@v4
       - name: Get Git Commit ID
         id: git_commit
         run: echo "GIT_COMMIT_ID=$(git rev-parse HEAD)" >> $GITHUB_ENV
       - name: Install Rust toolchain
-        run: rustup target add ${{ inputs.target }}
+        run: rustup target add ${{ matrix.target }}
       - name: Install musl-tools (if needed)
-        if: matrix.os == 'ubuntu-latest' && inputs.target == 'x86_64-unknown-linux-musl' || inputs.target == 'aarch64-unknown-linux-musl'
+        if: matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build Release
-        run: cargo build --release --target ${{ inputs.target }}
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Archive Release Build as ZIP
         run: |
-          cd target/${{ inputs.target }}/release
+          cd target/${{ matrix.target }}/release
           if [ "$RUNNER_OS" == "Windows" ]; then
-            Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip
+            Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
           else
-            zip -r mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
+            zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
           fi
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip
-          path: target/${{ inputs.target }}/release/mystiproxy-${{ inputs.target }}-${{ env.GIT_COMMIT_ID }}.zip
+          name: mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+          path: target/${{ matrix.target }}/release/mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
