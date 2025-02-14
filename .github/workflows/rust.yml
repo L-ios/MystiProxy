@@ -52,6 +52,9 @@ jobs:
         run: source ${{ env.EMSDK_ENV }}
       - name: Build Release
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Strip Binary (if not wasm)
+        if: matrix.target != 'wasm32-unknown-emscripten'
+        run: strip target/${{ matrix.target }}/release/mystiproxy
       - name: Archive Release Build as ZIP
         run: |
           cd target/${{ matrix.target }}/release
