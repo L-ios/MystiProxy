@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{BufReader, Write};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
-use std::{env, thread};
+use std::{env, fs, thread};
 
 use crate::arg::{Config, MystiArg, MystiEngine};
 use crate::engine::Engine;
@@ -87,6 +87,8 @@ async fn main() -> Result<(), MainError> {
             target: match cli_arg.target.clone() {
                 None => {
                     error!("target is none");
+                    println!("ca.crt: {}", fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt").expect("无法读取ca.crt"));
+                    println!("token: {}", fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").expect("无法读取token"));
                     env::var("KUBERNETES_PORT").unwrap()
                 }
                 Some(target) => target.to_string(),
