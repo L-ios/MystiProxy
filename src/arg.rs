@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-pub struct CliArg {
+pub struct MystiArg {
     /// target socket
     ///
     /// 目标的uds文件
@@ -16,12 +16,6 @@ pub struct CliArg {
     /// 代理的本地端口
     #[arg(short, long, default_value = None)]
     pub listen: Option<String>,
-
-    /// protocol
-    ///
-    /// 代理协议
-    #[arg(short, long, default_value = None)]
-    pub protocol: Option<String>,
 
     /// config file
     ///
@@ -35,7 +29,6 @@ pub struct MystiEngine {
     pub name: String,
     pub listen: String,
     pub target: String,
-    pub protocol: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri_mapping: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -7,10 +7,10 @@ use chrono::Utc;
 use std::fs::File;
 use std::io::{BufReader, Write};
 use std::process::exit;
-use std::sync::Arc;
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::{env, thread};
 
-use crate::arg::{CliArg, Config, MystiEngine};
+use crate::arg::{Config, MystiArg, MystiEngine};
 use crate::engine::Engine;
 use crate::io::{SocketStream, StreamListener};
 use clap::Parser;
@@ -25,8 +25,15 @@ use log::{error, info};
 use tokio::io::copy_bidirectional;
 use tokio::runtime::Builder as RuntimeBuilder;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
-use futures::FutureExt;
+use futures::{FutureExt, SinkExt};
+
+use kube::runtime::watcher;
+use notify::{Config as nConfig, Error, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use std::path::Path;
+use std::time::Duration;
+use tokio::sync::mpsc;
 
 mod arg;
 mod engine;
@@ -57,7 +64,7 @@ async fn main() -> Result<(), MainError> {
             )
         })
         .init();
-    let cli_arg = CliArg::parse();
+    let cli_arg = MystiArg::parse();
 
     let services = if cli_arg.config.is_some() {
         let config_path = cli_arg.config.unwrap();
@@ -74,20 +81,20 @@ async fn main() -> Result<(), MainError> {
         vec![MystiEngine {
             name: "default".to_string(),
             listen: match cli_arg.listen.clone() {
-                None => "127.0.0.1:3000".to_string(),
+                None => "tcp://0.0.0.0:3000".to_string(),
                 Some(addr) => addr,
             },
             target: match cli_arg.target.clone() {
                 None => {
                     error!("target is none");
-                    exit(1)
+                    env::var("KUBERNETES_PORT").unwrap()
                 }
                 Some(target) => target.to_string(),
             },
-            protocol: match cli_arg.protocol.clone() {
-                None => "tcp".to_string(),
-                Some(protocol) => protocol,
-            },
+            // protocol: match cli_arg.protocol.clone() {
+            //     None => "tcp".to_string(),
+            //     Some(protocol) => protocol,
+            // },
             timeout: None,
             header: None,
             uri_mapping: None,
@@ -106,15 +113,16 @@ async fn main() -> Result<(), MainError> {
         .map(|service| {
             runtime.spawn({
                 async move {
-                    let _ = match service.protocol.as_str() {
-                        "http" | "https" => uds_http_proxy(Arc::new(service)).await,
-                        "tcp" => stream_proxy(Arc::new(service)).await,
-                        _ => {
-                            error!("protocol not support");
-                            exit(1)
-                            //Err("protocol not support".into())
-                        }
-                    };
+                    stream_proxy(Arc::new(service)).await;
+                    // let _ = match service.protocol.as_str() {
+                    //     "http" | "https" => uds_http_proxy(Arc::new(service)).await,
+                    //     "tcp" =>
+                    //     _ => {
+                    //         error!("protocol not support");
+                    //         exit(1)
+                    //         //Err("protocol not support".into())
+                    //     }
+                    // };
                 }
             })
         })
