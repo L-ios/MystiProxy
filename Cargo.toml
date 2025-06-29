@@ -30,7 +30,7 @@ http_proxy = {path = "http_proxy"}
 [workspace]
 members = ["mystictl"]
 [dev-dependencies]
-test-case = "1"
+test-case = "*"
 
 [build-dependencies]
 prost-build = "0.13.3"
