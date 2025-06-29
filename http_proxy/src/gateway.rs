@@ -308,7 +308,7 @@ impl UriMapping {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use test_case::test_case;
     #[test]
     fn uri_mapping_serialize() {
         let mapping_string = r#"{

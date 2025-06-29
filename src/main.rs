@@ -29,7 +29,6 @@ use tokio_util::sync::CancellationToken;
 
 use futures::{FutureExt, SinkExt};
 
-use kube::runtime::watcher;
 use notify::{Config as nConfig, Error, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::Path;
 use std::time::Duration;
@@ -37,16 +36,28 @@ use tokio::sync::mpsc;
 
 mod arg;
 mod engine;
-mod ex_proxy;
-mod gateway;
 mod io;
-mod k8s;
-mod mocker;
-mod proxy;
 mod tls;
 mod utils;
 
 type MainError = Box<dyn std::error::Error + Send + Sync>;
+use libloading::{Library, Symbol};
+
+/*
+fn main() {
+    // 动态加载模块
+    load_module("mod1.so", "process_data", 10);
+    load_module("mod2.so", "advanced_calc", 20);
+}
+ */
+fn load_module(lib_path: &str, func_name: &str, arg: i32) {
+    unsafe {
+        let lib = Library::new(lib_path).expect("加载失败");
+        let func: Symbol<extern "C" fn(i32) -> i32> = lib.get(func_name.as_bytes())
+            .expect("函数未找到");
+        println!("结果: {}", func(arg));
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), MainError> {

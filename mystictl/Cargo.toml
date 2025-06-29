@@ -1,0 +1,11 @@
+[package]
+name = "mystictl"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kube = { version = "0.93.1", features = ["runtime", "derive", "http-proxy"] }
+k8s-openapi = { version = "0.22.0", features = ["latest"] }
+futures = { version = "0.3", features = ["async-await"] }
+log = "0.4"
+

@@ -101,5 +101,5 @@ async fn get_target(
             println!("Connection failed: {:?}", err);
         }
     });
-    return Ok(sender);
+    Ok(sender)
 }

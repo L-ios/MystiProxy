@@ -4,5 +4,5 @@
 #[target.x86_64-unknown-linux-musl]
 #rustflags = ["-C", "link-arg=-Wl,-z,relro,-z,now"]
 
-[ttarget.wasm32-unknown-emscripten]
+[target.wasm32-unknown-emscripten]
 rustflags = ["--cfg", "wasmedge", "--cfg", "tokio_unstable"]

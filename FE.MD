@@ -63,3 +63,65 @@ locations:
         location: "http://127.0.0.1:8080"
 @endyaml
 ```
+
+
+```plantuml
+@startjson
+{
+  "log": {
+    "access": "none",
+    "error": "none",
+    "loglevel": "none"
+  },
+  "inbounds": [
+    {
+      "port": 23456,
+      "listen": "127.0.0.1",
+      "protocol": "socks",
+      "settings": {
+        "auth": "noauth",
+        "udp": true,
+        "ip": "127.0.0.1",
+        "clients": null
+      },
+      "streamSettings": null
+    },
+    {
+      "listen": "0.0.0.0",
+      "port": 3333,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "network": "tcp,udp",
+        "followRedirect": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "http",
+      "settings": {
+        "servers": [
+          {
+            "address": "g1-s4.go2https.com",
+            "port": 20031,
+            "users": [
+              {
+                "user": "angrybird",
+                "pass": "fuck4gfw"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "security": "tls",
+        "tlsSettings": {
+          "allowInsecure": false
+        }
+      },
+      "tag": "HTTP"
+    }
+  ]
+}
+@endjosn
+```
