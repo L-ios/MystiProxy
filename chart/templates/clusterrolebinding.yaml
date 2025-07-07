@@ -1,0 +1,14 @@
+{{- if .Values.serviceAccount.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "mysti.serviceAccountName" . }}RoleBinding
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "mysti.serviceAccountName" . }}
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: {{ include "mysti.serviceAccountName" . }}Role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
