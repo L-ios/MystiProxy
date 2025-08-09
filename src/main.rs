@@ -104,10 +104,6 @@ async fn main() -> Result<(), MainError> {
                 }
                 Some(target) => target.to_string(),
             },
-            // protocol: match cli_arg.protocol.clone() {
-            //     None => "tcp".to_string(),
-            //     Some(protocol) => protocol,
-            // },
             timeout: None,
             header: None,
             uri_mapping: None,
@@ -127,15 +123,6 @@ async fn main() -> Result<(), MainError> {
             runtime.spawn({
                 async move {
                     stream_proxy(Arc::new(service)).await;
-                    // let _ = match service.protocol.as_str() {
-                    //     "http" | "https" => uds_http_proxy(Arc::new(service)).await,
-                    //     "tcp" =>
-                    //     _ => {
-                    //         error!("protocol not support");
-                    //         exit(1)
-                    //         //Err("protocol not support".into())
-                    //     }
-                    // };
                 }
             })
         })
@@ -172,13 +159,8 @@ async fn stream_proxy(service: Arc<MystiEngine>) -> Result<(), Box<dyn std::erro
                 };
 
                 info!("connect from {}", con);
-                // runtime.spawn(async move {
-                //     if let Err(err) = conn.await {
-                //         eprintln!("connection error: {}", err);
-                //     }
-                //     eprintln!("connection dropped: {}", con);
-                // });
                 let mut outbound = SocketStream::connect(service.target.to_string()).await.expect("failed to connect");
+                // tls 解密
                 runtime.spawn(async move {
                 copy_bidirectional(&mut inbound, &mut outbound)
                 .map(|r| {

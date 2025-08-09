@@ -28,7 +28,7 @@ libloading = "0.7"
 http_proxy = {path = "http_proxy"}
 
 [workspace]
-members = ["mystictl"]
+members = ["mystictl", "base64"]
 [dev-dependencies]
 test-case = "*"
 

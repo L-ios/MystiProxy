@@ -55,15 +55,15 @@ jobs:
       - name: Strip Binary (if not wasm)
         if: matrix.target != 'wasm32-unknown-emscripten'
         run: |
-          strip target/${{ matrix.target }}/release/mystiproxy;
-          upx --best target/${{ matrix.target }}/release/mystiproxy;
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec strip {} \;
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec upx --best {} \;
       - name: Archive Release Build as ZIP
         run: |
           cd target/${{ matrix.target }}/release
           if [ "$RUNNER_OS" == "Windows" ]; then
             Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
           else
-            zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip mystiproxy
+            zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip $(find . -maxdepth 1 -type f -executable)
           fi
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
