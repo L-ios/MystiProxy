@@ -51,7 +51,7 @@ jobs:
         if: matrix.target == 'wasm32-unknown-emscripten'
         run: source ${{ env.EMSDK_ENV }}
       - name: Build Release
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --all --target ${{ matrix.target }}
       - name: Strip Binary (if not wasm)
         if: matrix.target != 'wasm32-unknown-emscripten'
         run: |
