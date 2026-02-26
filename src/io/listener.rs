@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::io;
 
 use crate::io::stream::SocketStream;
-use tokio::net::{unix, TcpListener, TcpSocket, UnixListener, UnixSocket};
+use tokio::net::{unix, TcpListener, UnixListener};
 
 pub enum StreamListener {
     TCP(TcpListener),
@@ -21,7 +21,10 @@ impl StreamListener {
             let listener = UnixListener::bind(listen)?;
             Ok(Self::UDS(listener))
         } else {
-            todo!("Invalid listen")
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid listen address format",
+            ))
         }
     }
 
@@ -53,7 +56,3 @@ impl Display for SocketAddr {
     }
 }
 
-pub enum Socket {
-    Tcp(TcpSocket),
-    Uds(UnixSocket),
-}

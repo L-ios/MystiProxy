@@ -1,234 +1,148 @@
-#[cfg(test)]
-#[macro_use]
-extern crate test_case;
-extern crate core;
-
-use chrono::Utc;
-use std::fs::File;
-use std::io::{BufReader, Write};
-use std::process::exit;
-use std::sync::{Arc, Mutex};
-use std::{env, fs, thread};
-
-use crate::arg::{Config, MystiArg, MystiEngine};
-use crate::engine::Engine;
-use crate::io::{SocketStream, StreamListener};
+use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
+use mystiproxy::proxy::ProxyServer;
+use mystiproxy::Result;
 use clap::Parser;
-use env_logger::Env;
-use futures::future::join_all;
-use hyper_util::rt::TokioExecutor;
-use hyper_util::{
-    rt::TokioIo,
-    server::{conn::auto::Builder as ServerAutoBuilder, graceful::GracefulShutdown},
-};
-use log::{error, info};
-use tokio::io::copy_bidirectional;
-use tokio::runtime::Builder as RuntimeBuilder;
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-
-use futures::{FutureExt, SinkExt};
-
-use notify::{Config as nConfig, Error, Event, RecommendedWatcher, RecursiveMode, Watcher};
-use std::path::Path;
-use std::time::Duration;
-use tokio::sync::mpsc;
+use std::collections::HashMap;
+use tokio::signal;
+use tokio::task::JoinSet;
+use tracing::{error, info, warn};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod arg;
-mod engine;
-mod io;
-mod tls;
-mod utils;
 
-type MainError = Box<dyn std::error::Error + Send + Sync>;
-use libloading::{Library, Symbol};
-
-/*
-fn main() {
-    // 动态加载模块
-    load_module("mod1.so", "process_data", 10);
-    load_module("mod2.so", "advanced_calc", 20);
-}
- */
-fn load_module(lib_path: &str, func_name: &str, arg: i32) {
-    unsafe {
-        let lib = Library::new(lib_path).expect("加载失败");
-        let func: Symbol<extern "C" fn(i32) -> i32> = lib.get(func_name.as_bytes())
-            .expect("函数未找到");
-        println!("结果: {}", func(arg));
-    }
-}
+use arg::MystiArg;
 
 #[tokio::main]
-async fn main() -> Result<(), MainError> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-        .format(|buf, record| {
-            writeln!(
-                buf,
-                "{} {} [{}] {}:{} {}",
-                format!("{}", Utc::now().format("%Y-%m-%d %H:%M:%S")),
-                record.level(),
-                thread::current().name().unwrap_or("main"), //统一长度
-                record.file().unwrap_or(""),
-                record.line().unwrap_or(0),
-                record.args()
-            )
-        })
+async fn main() -> Result<()> {
+    // 解析命令行参数（在日志初始化之前，这样帮助信息不会被日志干扰）
+    let args = MystiArg::parse();
+
+    // 初始化日志
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
         .init();
-    let cli_arg = MystiArg::parse();
 
-    let services = if cli_arg.config.is_some() {
-        let config_path = cli_arg.config.unwrap();
-        let config_reader = match File::open(config_path) {
-            Ok(file) => Ok(BufReader::new(file)),
-            Err(err) => Err(err),
-        }
-        .unwrap();
+    tracing::info!("MystiProxy 启动中...");
 
-        let config: Config = serde_yaml::from_reader(config_reader)?;
+    // 加载配置
+    let config = load_config(&args)?;
 
-        config.service
-    } else {
-        vec![MystiEngine {
-            name: "default".to_string(),
-            listen: match cli_arg.listen.clone() {
-                None => "tcp://0.0.0.0:3000".to_string(),
-                Some(addr) => addr,
-            },
-            target: match cli_arg.target.clone() {
-                None => {
-                    error!("target is none");
-                    println!("ca.crt: {}", fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt").expect("无法读取ca.crt"));
-                    println!("token: {}", fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/token").expect("无法读取token"));
-                    env::var("KUBERNETES_PORT").unwrap()
+    // 启动代理服务器
+    let engines = config.mysti.engine;
+    if engines.is_empty() {
+        warn!("没有配置任何代理引擎");
+        return Ok(());
+    }
+
+    info!("共配置 {} 个代理引擎", engines.len());
+
+    // 创建任务集合来管理所有代理服务
+    let mut tasks: JoinSet<Result<()>> = JoinSet::new();
+
+    // 启动所有代理引擎
+    for (name, engine_config) in engines {
+        let name_clone = name.clone();
+        match ProxyServer::from_engine_config(&engine_config) {
+            Ok(mut server) => {
+                // 先启动服务器（绑定端口）
+                if let Err(e) = server.start().await {
+                    error!("代理引擎 '{}' 启动失败: {}", name_clone, e);
+                    continue;
                 }
-                Some(target) => target.to_string(),
-            },
-            timeout: None,
-            header: None,
-            uri_mapping: None,
-        }]
+
+                info!(
+                    "代理引擎 '{}' 已启动: {} -> {} ({:?})",
+                    name_clone,
+                    server.listen_addr(),
+                    server.target_addr(),
+                    engine_config.proxy_type
+                );
+
+                // 将服务器运行任务添加到任务集合
+                tasks.spawn(async move {
+                    server.run().await
+                });
+            }
+            Err(e) => {
+                error!("创建代理引擎 '{}' 失败: {}", name_clone, e);
+            }
+        }
+    }
+
+    // 等待关闭信号
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("无法监听 Ctrl+C 信号");
     };
 
-    // fix 当前for循环存在问题
-    let runtime = RuntimeBuilder::new_multi_thread()
-        .enable_all()
-        .thread_name_fn(|| format!("odd-"))
-        .build()
-        .expect("failed to create tokio runtime");
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("无法监听 SIGTERM 信号")
+            .recv()
+            .await;
+    };
 
-    let handles = services
-        .into_iter()
-        .map(|service| {
-            runtime.spawn({
-                async move {
-                    stream_proxy(Arc::new(service)).await;
-                }
-            })
-        })
-        .collect::<Vec<JoinHandle<()>>>();
-
-    join_all(handles).await;
-
-    Ok(())
-}
-
-async fn stream_proxy(service: Arc<MystiEngine>) -> Result<(), Box<dyn std::error::Error + Send>> {
-    let runtime = RuntimeBuilder::new_multi_thread()
-        .worker_threads(4)
-        .enable_io()
-        .thread_name(format!("{}-proxy-", service.name))
-        .build()
-        .expect("failed to create tokio runtime");
-
-    let listener = StreamListener::new(service.listen.clone()).await.unwrap();
-    info!("stream proxy start: {}", service.listen);
-
-    let graceful = GracefulShutdown::new();
-    let engine = Engine::new(service.clone());
-
-    loop {
-        tokio::select! {
-            conn = listener.accept() => {
-                let (mut inbound, con) = match conn {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!("failed to adccept connection: {e}");
-                        continue
-                    }
-                };
-
-                info!("connect from {}", con);
-                let mut outbound = SocketStream::connect(service.target.to_string()).await.expect("failed to connect");
-                // tls 解密
-                runtime.spawn(async move {
-                copy_bidirectional(&mut inbound, &mut outbound)
-                .map(|r| {
-                    if let Err(e) = r {
-                        println!("Failed to transfer; error={}", e);
-                    }
-                })
-                .await
-                });
-            }
-        }
-    }
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
 
     tokio::select! {
-        _ = graceful.shutdown() => {
-            info!("shutdown");
+        _ = ctrl_c => {
+            info!("收到 Ctrl+C 信号，正在关闭...");
+        }
+        _ = terminate => {
+            info!("收到 SIGTERM 信号，正在关闭...");
         }
     }
+
+    // 关闭所有任务
+    tasks.shutdown().await;
+    info!("所有代理服务已关闭");
+
     Ok(())
 }
 
-async fn uds_http_proxy(
-    service: Arc<MystiEngine>,
-) -> Result<(), Box<dyn std::error::Error + Send>> {
-    let runtime = RuntimeBuilder::new_multi_thread()
-        .worker_threads(4)
-        .enable_io()
-        .thread_name(format!("{}-proxy-", service.name))
-        .build()
-        .expect("failed to create tokio runtime");
-
-    let listener = StreamListener::new(service.listen.clone()).await.unwrap();
-    info!("uds http proxy start: {}", service.listen);
-
-    let graceful = GracefulShutdown::new();
-    let engine = Engine::new(service.clone());
-    let server = ServerAutoBuilder::new(TokioExecutor::new());
-    loop {
-        tokio::select! {
-            conn = listener.accept() => {
-                let (stream, con) = match conn {
-                    Ok(x) => x,
-                    Err(e) => {
-                        error!("failed to accept connection: {e}");
-                        continue
-                    }
-                };
-                info!("connect from {}", con);
-                let e_clone = engine.clone();
-                let conn = server.serve_connection_with_upgrades(TokioIo::new(Box::pin(stream)), e_clone);
-                let conn = graceful.watch(conn.into_owned());
-                runtime.spawn(async move {
-                    if let Err(err) = conn.await {
-                        eprintln!("connection error: {}", err);
-                    }
-                    eprintln!("connection dropped: {}", con);
-                });
-            }
-        }
+/// 加载配置
+///
+/// 优先级：
+/// 1. 如果指定了 --config，从配置文件加载
+/// 2. 如果指定了 --target 和 --listen，使用命令行参数创建配置
+/// 3. 否则返回错误
+fn load_config(args: &MystiArg) -> Result<MystiConfig> {
+    // 如果指定了配置文件，从文件加载
+    if let Some(config_path) = &args.config {
+        info!("从配置文件加载: {}", config_path);
+        return MystiConfig::from_yaml_file(config_path);
     }
 
-    tokio::select! {
-        _ = graceful.shutdown() => {
-            info!("shutdown");
-        }
+    // 如果指定了 target 和 listen，使用命令行参数创建配置
+    if let (Some(target), Some(listen)) = (&args.target, &args.listen) {
+        info!("使用命令行参数创建配置: {} -> {}", listen, target);
+
+        let engine_config = EngineConfig {
+            listen: listen.clone(),
+            target: target.clone(),
+            proxy_type: ProxyType::Tcp,
+            timeout: None,
+            header: None,
+            locations: None,
+        };
+
+        let mut engine_map = HashMap::new();
+        engine_map.insert("default".to_string(), engine_config);
+
+        return Ok(MystiConfig {
+            mysti: mystiproxy::config::Mysti { engine: engine_map },
+            cert: vec![],
+        });
     }
-    Ok(())
+
+    // 没有提供任何配置
+    Err(mystiproxy::MystiProxyError::Config(
+        "请提供配置文件 (--config) 或指定监听地址和目标地址 (--listen 和 --target)".to_string(),
+    ))
 }
-
-#[cfg(test)]
-mod tests {}

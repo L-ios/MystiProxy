@@ -13,7 +13,7 @@ pub enum SocketStream {
 impl SocketStream {
     pub async fn connect(addr: String) -> io::Result<Self> {
         if !addr.contains("://") {
-            todo!("invalid url")
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid url"));
         }
 
         let protocol = addr.split("://").nth(0).unwrap();
@@ -21,7 +21,10 @@ impl SocketStream {
         match protocol {
             "tcp" => TcpStream::connect(addr).await.map(Self::Tcp),
             "unix" => UnixStream::connect(addr).await.map(Self::Uds),
-            _ => todo!("not for support {}", protocol),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("unsupported protocol: {}", protocol),
+            )),
         }
     }
 }

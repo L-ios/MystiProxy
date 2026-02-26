@@ -1,4 +1,35 @@
+* 快速入门
+
+** 新手？从这里开始！
+- [[file:GETTING-STARTED.md][新手入门指南]] - 5 分钟快速上手
+- [[file:config.example.yaml][配置示例]] - 完整配置参考
+- [[file:examples/][配置模板]] - 常见场景配置模板
+
+* 目录
+
+1. [[快速入门]]
+2. [[主要功能]]
+3. [[配置文件结构]]
+4. [[使用说明]]
+   - [[快速开始]]
+   - [[配置说明]]
+   - [[功能示例]]
+5. [[高级配置]]
+6. [[故障排查]]
+7. [[性能优化]]
+8. [[部署建议]]
+9. [[安全建议]]
+
 * 微服务模拟器 （Mystiproxy）
+
+** 不使用镜像在k8s中安装 mystiproxy，主要使用secret/configmap
+不使用so加载技术，使用zip多文件解压为一个文件的技术
+*** 限制
+1. configmap只能存储为1M，且为字符串
+2. 不使用镜像，使用scratch
+3. 使用下载？
+
+
 
   主要解决，服务迁移到，导致一系列调试，中间态的问题，验证方式，一开始主要是为了观察docker等以uds文件进行通行的应用
 * 主要功能
@@ -247,3 +278,487 @@
 * Footnotes
 
 [fn:1] unix中也可以传输 https 协议的内容，https，主要是tcp socket上将其通过tls进行加密
+
+* 使用说明
+
+** 快速开始
+
+*** 1. 编译项目
+
+#+begin_src bash
+# 克隆项目
+git clone <repository-url>
+cd MystiProxy
+
+# 编译项目
+cargo build --release
+#+end_src
+
+*** 2. 创建配置文件
+
+#+begin_src bash
+# 复制示例配置文件
+cp config.example.yaml config.yaml
+
+# 根据需要修改配置
+vim config.yaml
+#+end_src
+
+*** 3. 运行服务
+
+#+begin_src bash
+# 使用默认配置文件运行
+./target/release/mystiproxy
+
+# 或指定配置文件
+./target/release/mystiproxy --config config.yaml
+
+# 设置日志级别
+RUST_LOG=debug ./target/release/mystiproxy
+#+end_src
+
+** 配置说明
+
+*** 基本配置结构
+
+MystiProxy 使用 YAML 格式的配置文件，主要包含以下部分：
+
+1. **mysti.engine**: 引擎配置，定义多个代理服务
+2. **cert**: 证书配置，用于 TLS 加密
+
+*** 监听地址格式
+
+支持以下格式的监听地址：
+
+| 格式 | 示例 | 说明 |
+|------+------+------|
+| TCP | ~tcp://0.0.0.0:8080~ | TCP 监听 |
+| Unix Socket | ~unix:///var/run/proxy.sock~ | Unix Domain Socket 监听 |
+
+*** 代理类型
+
+| 类型 | 说明 | 适用场景 |
+|------+------+----------|
+| ~tcp~ | 4 层代理 | 数据库、消息队列等 TCP 服务 |
+| ~http~ | 7 层代理 | HTTP/HTTPS 服务，支持请求/响应转换 |
+
+*** 匹配模式
+
+| 模式 | 说明 | 示例 |
+|------+------+------|
+| ~Full~ | 完全匹配 | ~/api/health~ 精确匹配 |
+| ~Prefix~ | 前缀匹配 | ~/api~ 匹配 ~/api/v1~、~/api/v2~ 等 |
+| ~Regex~ | 正则匹配 | ~/api/users/\d+~ 匹配数字 ID |
+| ~PrefixRegex~ | 带正则的前缀匹配 | 组合前缀和正则匹配 |
+
+*** 提供者类型
+
+| 类型 | 说明 | 用途 |
+|------+------+------|
+| ~static~ | 静态文件服务 | 提供静态资源访问 |
+| ~mock~ | Mock 响应 | 模拟 API 响应，用于测试 |
+| ~proxy~ | 代理转发 | 转发请求到后端服务 |
+
+*** 头部动作类型
+
+| 动作 | 说明 | 使用场景 |
+|------+------+----------|
+| ~overwrite~ | 强制覆盖 | 替换现有头部值 |
+| ~missed~ | 仅在缺失时添加 | 添加默认值 |
+| ~forceDelete~ | 强制删除 | 移除敏感头部 |
+
+** 功能示例
+
+*** 示例 1: Docker Socket 代理
+
+将 Docker Socket 代理到 TCP 端口，允许远程访问 Docker API：
+
+#+begin_src yaml
+mysti:
+  engine:
+    docker:
+      listen: tcp://0.0.0.0:3128
+      target: unix:///var/run/docker.sock
+      proxy_type: http
+      timeout: 10s
+      header:
+        Host:
+          value: localhost
+          action: overwrite
+#+end_src
+
+使用方式：
+
+#+begin_src bash
+# 列出容器
+curl http://localhost:3128/containers/json
+
+# 查看容器详情
+curl http://localhost:3128/containers/{container_id}/json
+#+end_src
+
+*** 示例 2: MySQL TCP 代理
+
+代理 MySQL 数据库连接：
+
+#+begin_src yaml
+mysti:
+  engine:
+    mysql:
+      listen: tcp://0.0.0.0:3307
+      target: tcp://127.0.0.1:3306
+      proxy_type: tcp
+      timeout: 30s
+#+end_src
+
+使用方式：
+
+#+begin_src bash
+# 连接到代理端口
+mysql -h 127.0.0.1 -P 3307 -u root -p
+#+end_src
+
+*** 示例 3: 静态文件服务
+
+提供静态文件访问：
+
+#+begin_src yaml
+mysti:
+  engine:
+    static-server:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://127.0.0.1:8080
+      proxy_type: http
+      locations:
+        - location: /static
+          mode: Prefix
+          provider: static
+          alias: /var/www/html
+          response:
+            headers:
+              Cache-Control:
+                value: "public, max-age=3600"
+                action: overwrite
+#+end_src
+
+使用方式：
+
+#+begin_src bash
+# 访问静态文件
+curl http://localhost:8080/static/index.html
+#+end_src
+
+*** 示例 4: Mock API 响应
+
+模拟 API 响应，用于前端开发或测试：
+
+#+begin_src yaml
+mysti:
+  engine:
+    mock-server:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://127.0.0.1:8080
+      proxy_type: http
+      locations:
+        # 健康检查
+        - location: /health
+          mode: Full
+          provider: mock
+          response:
+            status: 200
+            headers:
+              Content-Type:
+                value: "application/json"
+                action: overwrite
+            body:
+              type: static
+              content: '{"status": "healthy"}'
+
+        # 条件 Mock
+        - location: /api
+          mode: Prefix
+          provider: mock
+          condition:
+            - type: header
+              value: "X-Mock-Mode=true"
+          response:
+            status: 200
+            body:
+              type: static
+              content: '{"mocked": true, "data": []}'
+#+end_src
+
+使用方式：
+
+#+begin_src bash
+# 健康检查
+curl http://localhost:8080/health
+
+# 条件 Mock（需要特定头部）
+curl -H "X-Mock-Mode: true" http://localhost:8080/api/users
+#+end_src
+
+*** 示例 5: API 网关
+
+作为 API 网关，转发请求到后端服务：
+
+#+begin_src yaml
+mysti:
+  engine:
+    api-gateway:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://backend.example.com:80
+      proxy_type: http
+      timeout: 30s
+      header:
+        X-Proxy-By:
+          value: "MystiProxy"
+          action: missed
+      locations:
+        # 用户服务
+        - location: /api/users
+          mode: Prefix
+          provider: proxy
+          request:
+            uri:
+              path: /users
+            headers:
+              X-Real-IP:
+                value: "$client_ip"
+                action: missed
+
+        # 订单服务
+        - location: /api/orders
+          mode: Prefix
+          provider: proxy
+          request:
+            uri:
+              path: /orders
+#+end_src
+
+*** 示例 6: TLS 双向认证
+
+配置 TLS 双向认证（需要证书）：
+
+#+begin_src yaml
+mysti:
+  engine:
+    secure-proxy:
+      listen: tcp://0.0.0.0:8443
+      target: tcp://127.0.0.1:8080
+      proxy_type: http
+      # TLS 配置（需要实现）
+      # tls:
+      #   cert: /path/to/server.crt
+      #   key: /path/to/server.key
+      #   client_ca: /path/to/ca.crt
+
+cert:
+  - name: server-cert
+    root_key: ""
+  - name: client-ca
+    root_key: ""
+#+end_src
+
+*** 示例 7: 请求/响应转换
+
+转换请求和响应内容：
+
+#+begin_src yaml
+mysti:
+  engine:
+    transform-proxy:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://backend.example.com:80
+      proxy_type: http
+      locations:
+        - location: /api/v1
+          mode: Prefix
+          provider: proxy
+          request:
+            # URI 转换
+            uri:
+              path: /api/v2
+              query: "version=1"
+
+            # 请求头转换
+            headers:
+              Host:
+                value: backend.example.com
+                action: overwrite
+              X-Auth-Token:
+                action: forceDelete
+
+            # 请求体转换（JSON）
+            body:
+              type: json
+              json:
+                path: "$.user.name"
+                value: "anonymous"
+                action: overwrite
+
+          response:
+            # 响应头转换
+            headers:
+              Server:
+                value: "MystiProxy"
+                action: overwrite
+
+            # 响应体转换（JSON）
+            body:
+              type: json
+              json:
+                path: "$.timestamp"
+                value: "2024-01-01T00:00:00Z"
+                action: add
+#+end_src
+
+** 高级配置
+
+*** 超时设置
+
+支持多种时间单位：
+
+#+begin_src yaml
+timeout: 10s    # 10 秒
+timeout: 5m     # 5 分钟
+timeout: 1h     # 1 小时
+timeout: 500ms  # 500 毫秒
+#+end_src
+
+*** 条件匹配
+
+支持多种条件类型：
+
+#+begin_src yaml
+condition:
+  # 头部条件
+  - type: header
+    value: "X-Debug=true"
+
+  # 查询参数条件
+  - type: query
+    value: "mock=true"
+
+  # 请求体条件
+  - type: body
+    value: "$.test=true"
+#+end_src
+
+*** JSONPath 表达式
+
+在请求/响应体转换中使用 JSONPath：
+
+#+begin_src yaml
+body:
+  type: json
+  json:
+    # 访问对象属性
+    path: "$.user.name"
+
+    # 访问数组元素
+    path: "$.users[0].id"
+
+    # 访问所有匹配项
+    path: "$.users[*].name"
+#+end_src
+
+** 故障排查
+
+*** 查看日志
+
+#+begin_src bash
+# 设置日志级别
+RUST_LOG=debug ./target/release/mystiproxy
+
+# 或在运行时设置
+export RUST_LOG=info,hyper=debug
+./target/release/mystiproxy
+#+end_src
+
+*** 常见问题
+
+1. **端口被占用**
+   #+begin_src bash
+   # 查看端口占用
+   lsof -i :8080
+
+   # 或使用 netstat
+   netstat -tunlp | grep 8080
+   #+end_src
+
+2. **权限不足（Unix Socket）**
+   #+begin_src bash
+   # 检查 socket 文件权限
+   ls -la /var/run/docker.sock
+
+   # 使用 sudo 运行
+   sudo ./target/release/mystiproxy
+   #+end_src
+
+3. **配置文件格式错误**
+   #+begin_src bash
+   # 验证 YAML 格式
+   cat config.yaml | python -m yaml
+   #+end_src
+
+** 性能优化
+
+*** 连接池
+
+MystiProxy 自动管理连接池，无需额外配置。
+
+*** 并发处理
+
+基于 Tokio 异步运行时，支持高并发连接。
+
+*** 内存优化
+
+使用流式处理，避免大内存占用。
+
+** 部署建议
+
+*** Docker 部署
+
+#+begin_src dockerfile
+FROM scratch
+COPY mystiproxy /mystiproxy
+COPY config.yaml /config.yaml
+CMD ["/mystiproxy", "--config", "/config.yaml"]
+#+end_src
+
+*** Kubernetes 部署
+
+使用 Helm Chart 部署：
+
+#+begin_src bash
+# 安装 Helm Chart
+helm install mystiproxy ./chart -f values.yaml
+#+end_src
+
+*** 系统服务
+
+创建 systemd 服务文件：
+
+#+begin_src ini
+[Unit]
+Description=MystiProxy Service
+After=network.target
+
+[Service]
+Type=simple
+User=mystiproxy
+ExecStart=/usr/local/bin/mystiproxy --config /etc/mystiproxy/config.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+#+end_src
+
+** 安全建议
+
+1. **使用 TLS 加密**：在生产环境中启用 TLS
+2. **限制访问**：使用防火墙规则限制访问来源
+3. **鉴权配置**：启用 Header 或 JWT 鉴权
+4. **日志审计**：记录所有访问日志
+5. **定期更新**：保持依赖库最新版本
