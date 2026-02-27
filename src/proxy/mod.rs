@@ -12,9 +12,13 @@ pub mod unix;
 pub use address::Address;
 pub use forward::{
     connect_to_target, forward_bidirectional, forward_bidirectional_with_timeout,
-    forward_tcp_to_tcp, forward_tcp_to_uds, forward_to_target, forward_to_target_with_timeout,
+    forward_tcp_to_tcp, forward_to_target, forward_to_target_with_timeout,
     ForwardResult, TransferStats,
 };
+
+#[cfg(unix)]
+pub use forward::forward_tcp_to_uds;
+
 pub use tcp::TcpProxyListener;
 
 use std::time::Duration;
@@ -83,7 +87,6 @@ impl ProxyServer {
             self.config.listen, self.config.target, self.config.proxy_type
         );
 
-        // 创建监听器
         let listener = StreamListener::new(self.config.listen.to_string()).await?;
         self.listener = Some(listener);
 
@@ -110,7 +113,6 @@ impl ProxyServer {
                     let target_addr = self.config.target.to_string();
                     let timeout_duration = self.config.timeout;
 
-                    // 为每个连接创建新的任务
                     tokio::spawn(async move {
                         if let Err(e) = Self::handle_connection(stream, target_addr, timeout_duration).await {
                             error!("Connection error: {}", e);
@@ -259,10 +261,14 @@ mod tests {
         let addr = Address::parse("tcp://0.0.0.0:3128").unwrap();
         assert!(addr.is_tcp());
 
-        let addr = Address::parse("unix:///var/run/docker.sock").unwrap();
-        assert!(addr.is_unix());
+        #[cfg(unix)]
+        {
+            let addr = Address::parse("unix:///var/run/docker.sock").unwrap();
+            assert!(addr.is_unix());
+        }
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_proxy_config_from_engine_config() {
         let engine_config = EngineConfig {

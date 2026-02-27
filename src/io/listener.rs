@@ -2,11 +2,16 @@ use core::net;
 use std::fmt::{Display, Formatter};
 use std::io;
 
+use tokio::net::TcpListener;
+
+#[cfg(unix)]
+use tokio::net::{unix, UnixListener};
+
 use crate::io::stream::SocketStream;
-use tokio::net::{unix, TcpListener, UnixListener};
 
 pub enum StreamListener {
     TCP(TcpListener),
+    #[cfg(unix)]
     UDS(UnixListener),
 }
 
@@ -17,9 +22,19 @@ impl StreamListener {
             let listener = TcpListener::bind(listen).await?;
             Ok(Self::TCP(listener))
         } else if listen.starts_with("unix://") {
-            let listen = listen.replace("unix://", "");
-            let listener = UnixListener::bind(listen)?;
-            Ok(Self::UDS(listener))
+            #[cfg(unix)]
+            {
+                let listen = listen.replace("unix://", "");
+                let listener = UnixListener::bind(listen)?;
+                Ok(Self::UDS(listener))
+            }
+            #[cfg(not(unix))]
+            {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "Unix Domain Sockets are not supported on this platform",
+                ))
+            }
         } else {
             Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -34,6 +49,7 @@ impl StreamListener {
                 let (stream, _addr) = listener.accept().await?;
                 Ok((SocketStream::Tcp(stream), SocketAddr::Tcp(_addr)))
             }
+            #[cfg(unix)]
             Self::UDS(listener) => {
                 let (stream, _addr) = listener.accept().await?;
                 Ok((SocketStream::Uds(stream), SocketAddr::Uds(_addr)))
@@ -44,6 +60,7 @@ impl StreamListener {
 
 pub enum SocketAddr {
     Tcp(net::SocketAddr),
+    #[cfg(unix)]
     Uds(unix::SocketAddr),
 }
 
@@ -51,8 +68,8 @@ impl Display for SocketAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Tcp(addr) => write!(f, "tcp://{}", addr),
+            #[cfg(unix)]
             Self::Uds(addr) => write!(f, "unix://{:?}", addr),
         }
     }
 }
-

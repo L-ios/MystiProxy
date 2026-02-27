@@ -3,6 +3,8 @@
 //! 提供统一的地址解析功能，支持 TCP 和 Unix Domain Socket 地址
 
 use std::net::SocketAddr;
+
+#[cfg(unix)]
 use std::path::PathBuf;
 
 use crate::error::{MystiProxyError, Result};
@@ -13,6 +15,7 @@ pub enum Address {
     /// TCP 地址
     Tcp(SocketAddr),
     /// Unix Domain Socket 地址
+    #[cfg(unix)]
     Unix(PathBuf),
 }
 
@@ -22,8 +25,8 @@ impl Address {
     /// 支持的格式:
     /// - `tcp://0.0.0.0:3128`
     /// - `tcp://127.0.0.1:8080`
-    /// - `unix:///var/run/docker.sock`
-    /// - `unix:///tmp/proxy.sock`
+    /// - `unix:///var/run/docker.sock` (仅 Unix 平台)
+    /// - `unix:///tmp/proxy.sock` (仅 Unix 平台)
     ///
     /// # Examples
     ///
@@ -31,11 +34,9 @@ impl Address {
     /// use mystiproxy::proxy::Address;
     ///
     /// let addr = Address::parse("tcp://0.0.0.0:3128")?;
-    /// let addr = Address::parse("unix:///var/run/docker.sock")?;
     /// # Ok::<(), mystiproxy::MystiProxyError>(())
     /// ```
     pub fn parse(s: &str) -> Result<Self> {
-        // 检查是否包含协议分隔符
         if !s.contains("://") {
             return Err(MystiProxyError::Other(format!(
                 "Invalid address format: missing protocol separator '://': {}",
@@ -43,7 +44,6 @@ impl Address {
             )));
         }
 
-        // 分割协议和地址部分
         let parts: Vec<&str> = s.splitn(2, "://").collect();
         if parts.len() != 2 {
             return Err(MystiProxyError::Other(format!(
@@ -60,8 +60,15 @@ impl Address {
                 let socket_addr: SocketAddr = address.parse()?;
                 Ok(Address::Tcp(socket_addr))
             }
+            #[cfg(unix)]
             "unix" => {
                 Ok(Address::Unix(PathBuf::from(address)))
+            }
+            #[cfg(not(unix))]
+            "unix" => {
+                Err(MystiProxyError::Other(
+                    "Unix Domain Sockets are not supported on this platform".to_string(),
+                ))
             }
             _ => Err(MystiProxyError::Other(format!(
                 "Unsupported protocol: {}",
@@ -74,6 +81,7 @@ impl Address {
     pub fn protocol(&self) -> &'static str {
         match self {
             Address::Tcp(_) => "tcp",
+            #[cfg(unix)]
             Address::Unix(_) => "unix",
         }
     }
@@ -84,6 +92,7 @@ impl Address {
     }
 
     /// 检查是否为 Unix Domain Socket 地址
+    #[cfg(unix)]
     pub fn is_unix(&self) -> bool {
         matches!(self, Address::Unix(_))
     }
@@ -92,11 +101,13 @@ impl Address {
     pub fn as_tcp(&self) -> Option<&SocketAddr> {
         match self {
             Address::Tcp(addr) => Some(addr),
+            #[cfg(unix)]
             _ => None,
         }
     }
 
     /// 获取 Unix 地址，如果不是 Unix 地址则返回 None
+    #[cfg(unix)]
     pub fn as_unix(&self) -> Option<&PathBuf> {
         match self {
             Address::Unix(path) => Some(path),
@@ -109,6 +120,7 @@ impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Address::Tcp(addr) => write!(f, "tcp://{}", addr),
+            #[cfg(unix)]
             Address::Unix(path) => write!(f, "unix://{}", path.display()),
         }
     }
@@ -143,6 +155,7 @@ mod tests {
         assert_eq!(socket_addr.port(), 8080);
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_unix_address() {
         let addr = Address::parse("unix:///var/run/docker.sock").unwrap();
@@ -151,6 +164,7 @@ mod tests {
         assert_eq!(addr.to_string(), "unix:///var/run/docker.sock");
     }
 
+    #[cfg(unix)]
     #[test]
     fn test_parse_unix_temp() {
         let addr = Address::parse("unix:///tmp/proxy.sock").unwrap();

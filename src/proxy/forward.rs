@@ -56,11 +56,9 @@ pub async fn forward_bidirectional(
     let (mut client_read, mut client_write) = io::split(client);
     let (mut target_read, mut target_write) = io::split(target);
 
-    // 并发执行双向拷贝
     let client_to_target = io::copy(&mut client_read, &mut target_write);
     let target_to_client = io::copy(&mut target_read, &mut client_write);
 
-    // 等待两个方向都完成
     let (ct_result, tc_result) = tokio::try_join!(client_to_target, target_to_client)?;
 
     Ok(ForwardResult {
@@ -135,6 +133,7 @@ pub async fn forward_tcp_to_tcp(
 ///
 /// * `client` - 客户端 TCP 连接
 /// * `uds_path` - 目标 UDS 路径（如 "unix:///var/run/docker.sock"）
+#[cfg(unix)]
 pub async fn forward_tcp_to_uds(
     client: tokio::net::TcpStream,
     uds_path: &str,
@@ -190,10 +189,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_forward_bidirectional() {
-        // 创建一个 echo 服务器
         let (listener, addr) = setup_echo_server().await;
 
-        // 在后台运行 echo 服务器
         tokio::spawn(async move {
             if let Ok((mut stream, _)) = listener.accept().await {
                 let mut buf = vec![0u8; 1024];
@@ -208,27 +205,21 @@ mod tests {
             }
         });
 
-        // 等待服务器启动
         tokio::time::sleep(Duration::from_millis(10)).await;
 
-        // 创建两个连接：一个作为客户端，一个作为目标
         let mut client = TcpStream::connect(addr).await.unwrap();
         let target = TcpStream::connect(addr).await.unwrap();
 
-        // 发送一些数据
         client.write_all(b"hello").await.unwrap();
         
-        // 关闭写入端
         client.shutdown().await.unwrap();
 
-        // 使用 timeout 包装转发操作
         let result = tokio::time::timeout(
             Duration::from_secs(2),
             forward_bidirectional(client, target),
         )
         .await;
 
-        // 测试应该成功完成
         assert!(result.is_ok(), "forward_bidirectional should complete within timeout");
     }
 
@@ -236,7 +227,6 @@ mod tests {
     async fn test_connect_to_target_tcp() {
         let (listener, addr) = setup_echo_server().await;
 
-        // 在后台运行服务器
         tokio::spawn(async move {
             if let Ok((mut stream, _)) = listener.accept().await {
                 let mut buf = [0u8; 10];
