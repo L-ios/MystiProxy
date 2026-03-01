@@ -23,4 +23,4 @@ pub use error::{MystiProxyError, Result};
 pub use mock::{MockBuilder, MockLocation, MockResponse, MockService};
 
 // 重导出上下文相关类型
-pub use context::{get_engine_name, set_engine_name, thread_identity, with_engine};
+pub use context::{get_engine_name, get_thread_id, set_engine_name, thread_identity, with_engine};
