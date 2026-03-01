@@ -1,14 +1,57 @@
 [package]
 name = "http_proxy"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[features]
+default = []
+local-management = [
+    "dep:sqlx",
+    "dep:tokio",
+    "dep:uuid",
+    "dep:chrono",
+    "dep:thiserror",
+    "dep:anyhow",
+    "dep:tracing",
+    "dep:serde_json",
+    "dep:serde_yaml",
+    "dep:sha2",
+    "dep:async-trait",
+    "dep:axum",
+    "dep:tower",
+    "dep:reqwest",
+    "dep:mysti-common",
+]
 
 [dependencies]
+# Internal crates
+mysti-common = { path = "../mysti-common", optional = true }
+
 log = "0.4"
 regex = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 futures = { version = "0.3", features = ["async-await"] }
 
+# Local management dependencies (feature-gated)
+tokio = { version = "1", features = ["sync", "time", "rt", "macros"], optional = true }
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "uuid", "chrono", "json"], optional = true }
+uuid = { version = "1", features = ["v4", "serde"], optional = true }
+chrono = { version = "0.4", features = ["serde"], optional = true }
+thiserror = { version = "1", optional = true }
+anyhow = { version = "1", optional = true }
+tracing = { version = "0.1", optional = true }
+serde_json = { version = "1.0", optional = true }
+serde_yaml = { version = "0.9", optional = true }
+sha2 = { version = "0.10", optional = true }
+async-trait = { version = "0.1", optional = true }
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", features = ["util"], optional = true }
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
 [dev-dependencies]
 serde_json = "1.0"
+serde_yaml = "0.9"
 test-case = "*"
+tokio = { version = "1", features = ["full"] }
+tempfile = "3"
+tracing-subscriber = "0.3"

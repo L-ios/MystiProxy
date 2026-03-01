@@ -5,6 +5,16 @@
 **Status**: Draft  
 **Input**: User description: "http mock能力需要一个管理系统，现在做一个管理mock数据的管理系统"
 
+## Clarifications
+
+### Session 2026-03-01
+
+- Q: MystiProxy 如何从管理系统获取 mock 配置？ → A: 启动时加载 + 定期轮询刷新 + 管理系统主动推送变更（A+B混合方案）
+- Q: 管理系统的部署形态是什么？ → A: 双层架构：中心管理系统（集中式，与MystiProxy分离）+ MystiProxy本地管理（每个实例可独立增删改，同步到中心）
+- Q: 当中心管理系统和 MystiProxy 本地同时修改同一配置时，如何解决冲突？ → A: 手动解决（检测冲突后提示用户选择）
+- Q: MystiProxy 本地管理界面是什么形式？ → A: Web UI + REST API（主要）+ 简单CLI（保留现有能力）
+- Q: 中心管理系统和 MystiProxy 本地的配置数据存储方式是什么？ → A: 中心用数据库，MystiProxy用内嵌数据库（如SQLite），配置数据加载到数据库并同步到中心
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Web Dashboard Interface (Priority: P1)
@@ -212,6 +222,43 @@ As a developer, I need integration with IDEs, CI/CD tools, and API clients, so t
 - **FR-011**: System MUST support tagging and categorizing mock configurations
 - **FR-012**: System MUST provide validation for mock configurations to prevent invalid entries
 
+**MystiProxy Synchronization**
+
+- **FR-053**: System MUST provide API endpoints for MystiProxy to fetch mock configurations on startup
+- **FR-054**: System MUST support push notifications (WebSocket/webhook) to notify MystiProxy of configuration changes in real-time
+- **FR-055**: System MUST support periodic polling from MystiProxy as a fallback synchronization mechanism
+- **FR-056**: System MUST maintain configuration versioning to support incremental sync (delta updates)
+- **FR-057**: System MUST provide configuration checksum/hash for MystiProxy to detect changes efficiently
+
+**Dual-Layer Management Architecture**
+
+- **FR-058**: Central Management System MUST be deployable as a standalone service independent of MystiProxy instances
+- **FR-059**: Each MystiProxy instance MUST have a local management interface for CRUD operations on its own mock configurations
+- **FR-060**: Local changes in MystiProxy MUST sync to Central Management System (push on change)
+- **FR-061**: Central Management System MUST be able to push configurations to specific MystiProxy instances or groups
+- **FR-062**: System MUST detect conflicts when same configuration is modified in both central and local systems simultaneously
+- **FR-063**: System MUST prompt user to manually resolve conflicts by choosing: keep local, keep central, or merge
+- **FR-064**: System MUST display diff view showing differences between conflicting configurations
+- **FR-065**: MystiProxy MUST support offline mode where local changes are queued and synced when connection is restored
+- **FR-066**: Central Management System MUST provide visibility into all connected MystiProxy instances and their sync status
+
+**MystiProxy Local Management Interface**
+
+- **FR-067**: MystiProxy MUST provide a local Web UI for managing its own mock configurations
+- **FR-068**: MystiProxy MUST provide a local REST API for programmatic management (same API contract as Central)
+- **FR-069**: MystiProxy MUST maintain existing CLI capabilities for basic operations (start, stop, config reload, status check)
+- **FR-070**: Local Web UI MUST display sync status with Central Management System (connected/disconnected/pending sync)
+- **FR-071**: Local management interface MUST show conflict notifications when sync conflicts are detected
+
+**Data Storage Architecture**
+
+- **FR-072**: Central Management System MUST use a database for persistent storage of mock configurations and metadata
+- **FR-073**: MystiProxy MUST use an embedded database (e.g., SQLite) for local configuration storage
+- **FR-074**: MystiProxy MUST load user-configured mock data from config files into the embedded database on startup
+- **FR-075**: MystiProxy MUST sync local database changes to Central Management System
+- **FR-076**: Both Central and MystiProxy MUST support database migration for schema versioning
+- **FR-077**: System MUST support data export/import for backup and migration purposes
+
 **Import/Export and Version Control**
 
 - **FR-013**: System MUST support exporting all mock configurations as a single file
@@ -277,7 +324,7 @@ As a developer, I need integration with IDEs, CI/CD tools, and API clients, so t
 
 - **User**: Represents a system user with authentication credentials and role-based permissions. Attributes include username, email, password hash, role, and team memberships.
 
-- **Mock Configuration**: Defines a mock endpoint including matching criteria, response template, state transitions, and metadata. Attributes include name, path, method, matching rules, response configuration, and state management settings.
+- **Mock Configuration**: Defines a mock endpoint including matching criteria, response template, state transitions, and metadata. Attributes include name, path, method, matching rules, response configuration, state management settings, and source (central/local).
 
 - **Environment**: Represents a deployment environment (dev, test, staging, production). Attributes include name, description, endpoints, and environment-specific configuration overrides.
 
@@ -286,6 +333,10 @@ As a developer, I need integration with IDEs, CI/CD tools, and API clients, so t
 - **Analytics Record**: Captures usage data for mock endpoints. Attributes include timestamp, mock ID, request details, response time, status code, and error information.
 
 - **Version**: Represents a specific version of a mock configuration. Attributes include configuration data, timestamp, user information, and change description.
+
+- **MystiProxy Instance**: Represents a connected MystiProxy proxy server. Attributes include instance ID, name, endpoint URL, sync status, last sync timestamp, and configuration checksum.
+
+- **Sync Record**: Tracks synchronization events between MystiProxy and Central. Attributes include timestamp, source (central/local), operation type, configuration ID, and conflict status.
 
 ## Success Criteria *(mandatory)*
 
@@ -344,3 +395,6 @@ As a developer, I need integration with IDEs, CI/CD tools, and API clients, so t
 - Integration with development tools will be implemented through standard APIs
 - Performance requirements are based on typical development and testing environments
 - Security requirements follow industry best practices for web applications
+- Central Management System and MystiProxy communicate over reliable network (with fallback for offline mode)
+- MystiProxy instances can operate independently when disconnected from Central
+- Configuration schema is compatible between Central and MystiProxy embedded databases
