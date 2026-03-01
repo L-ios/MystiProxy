@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -22,6 +23,39 @@ use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
 use crate::error::{MystiProxyError, Result};
+
+/// 获取当前线程名称
+fn thread_name() -> String {
+    thread::current()
+        .name()
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+/// 带线程名称的日志宏
+macro_rules! log_debug {
+    ($($arg:tt)*) => {
+        debug!("[{}] {}", thread_name(), format!($($arg)*))
+    };
+}
+
+macro_rules! log_info {
+    ($($arg:tt)*) => {
+        info!("[{}] {}", thread_name(), format!($($arg)*))
+    };
+}
+
+macro_rules! log_warn {
+    ($($arg:tt)*) => {
+        warn!("[{}] {}", thread_name(), format!($($arg)*))
+    };
+}
+
+macro_rules! log_error {
+    ($($arg:tt)*) => {
+        error!("[{}] {}", thread_name(), format!($($arg)*))
+    };
+}
 
 /// BoxBody 类型别名
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, MystiProxyError>;
@@ -256,10 +290,10 @@ impl HttpProxyService {
         let host = uri.host().unwrap_or("unknown");
         let port = uri.port_u16().unwrap_or(80);
 
-        debug!("Forwarding HTTP request: {} {}", method, uri);
+        log_debug!("Forwarding HTTP request: {} {}", method, uri);
 
         if !config.is_host_allowed(host) {
-            warn!("Host {} is not allowed", host);
+            log_warn!("Host {} is not allowed", host);
             return Ok(Response::builder()
                 .status(StatusCode::FORBIDDEN)
                 .body(text_body("Access to this host is forbidden"))
@@ -287,7 +321,7 @@ impl HttpProxyService {
 
         tokio::spawn(async move {
             if let Err(err) = conn.await {
-                error!("Connection error: {:?}", err);
+                log_error!("Connection error: {:?}", err);
             }
         });
 
@@ -329,7 +363,7 @@ impl HttpProxyService {
 
         let new_response = Response::from_parts(parts, Full::new(body_bytes).map_err(|never| match never {}).boxed());
 
-        debug!("HTTP request completed: {} {}", method, uri);
+        log_debug!("HTTP request completed: {} {}", method, uri);
         Ok(new_response)
     }
 
@@ -352,9 +386,9 @@ impl Service<Request<Incoming>> for HttpProxyService {
 
         Box::pin(async move {
             if let Some(user) = config.auth.authenticate(req.headers()) {
-                debug!("Proxy authenticated as user: {}", user);
+                log_debug!("Proxy authenticated as user: {}", user);
             } else {
-                warn!("Proxy authentication failed");
+                log_warn!("Proxy authentication failed");
                 return Ok(config.auth.create_auth_required_response());
             }
 
@@ -449,7 +483,7 @@ impl HttpProxyAcceptor {
         }
 
         if let Some(user) = self.authenticate(&headers) {
-            debug!("Proxy authenticated as user: {}", user);
+            log_debug!("Proxy authenticated as user: {}", user);
         } else {
             let response = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"MystiProxy\"\r\n\r\n";
             client_stream.write_all(response.as_bytes()).await
@@ -503,7 +537,7 @@ impl HttpProxyAcceptor {
         target_host: &str,
         mut client_stream: tokio::net::TcpStream,
     ) -> Result<()> {
-        debug!("Establishing CONNECT tunnel to {}", target_host);
+        log_debug!("Establishing CONNECT tunnel to {}", target_host);
 
         let target_addr = if target_host.contains(':') {
             target_host.to_string()
@@ -519,7 +553,7 @@ impl HttpProxyAcceptor {
         .map_err(|_| MystiProxyError::Timeout)?
         .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {}: {}", target_addr, e)))?;
 
-        debug!("Connected to {}", target_addr);
+        log_debug!("Connected to {}", target_addr);
 
         let success_response = "HTTP/1.1 200 Connection Established\r\n\r\n";
         client_stream
@@ -527,7 +561,7 @@ impl HttpProxyAcceptor {
             .await
             .map_err(MystiProxyError::Io)?;
 
-        info!("CONNECT tunnel established: {}", target_host);
+        log_info!("CONNECT tunnel established: {}", target_host);
 
         let (mut client_read, mut client_write) = client_stream.split();
         let (mut target_read, mut target_write) = target_stream.split();
@@ -564,7 +598,7 @@ impl HttpProxyAcceptor {
 
         let _ = tokio::try_join!(client_to_target, target_to_client);
 
-        debug!("CONNECT tunnel closed: {}", target_host);
+        log_debug!("CONNECT tunnel closed: {}", target_host);
         Ok(())
     }
 }
