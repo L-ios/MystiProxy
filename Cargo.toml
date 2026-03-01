@@ -90,6 +90,17 @@ base64 = "0.22"
 # SHA256 (for password hashing)
 sha2 = "0.10"
 
+# MD4, MD5 for NTLM authentication
+md4 = "0.10"
+md-5 = "0.10"
+hmac = "0.12"
+
+# DES for NTLM authentication
+des = "0.8"
+
+# Random number generation
+rand = "0.8"
+
 # Local management dependencies (feature-gated)
 sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "uuid", "chrono", "json"], optional = true }
 async-trait = { version = "0.1", optional = true }

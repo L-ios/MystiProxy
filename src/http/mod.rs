@@ -6,6 +6,7 @@ mod auth;
 mod body;
 mod client;
 mod handler;
+mod ntlm;
 mod proxy;
 mod server;
 mod static_files;
@@ -21,6 +22,7 @@ pub use auth::{
 pub use body::{read_json_body, write_json_body, BodyTransformer};
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
+pub use ntlm::{NtlmAuthenticator, NtlmConfig, NtlmVersion, Type2Message};
 pub use proxy::{
     HttpProxyAcceptor, HttpProxyConfig, HttpProxyService, ProxyAuthConfig,
 };
