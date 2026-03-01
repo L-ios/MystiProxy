@@ -7,7 +7,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
 use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
@@ -22,38 +21,31 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info, warn};
 
+use crate::context::thread_identity;
 use crate::error::{MystiProxyError, Result};
 
-/// 获取当前线程名称
-fn thread_name() -> String {
-    thread::current()
-        .name()
-        .unwrap_or("unknown")
-        .to_string()
-}
-
-/// 带线程名称的日志宏
+/// 带线程标识的日志宏
 macro_rules! log_debug {
     ($($arg:tt)*) => {
-        debug!("[{}] {}", thread_name(), format!($($arg)*))
+        debug!("[{}] {}", thread_identity(), format!($($arg)*))
     };
 }
 
 macro_rules! log_info {
     ($($arg:tt)*) => {
-        info!("[{}] {}", thread_name(), format!($($arg)*))
+        info!("[{}] {}", thread_identity(), format!($($arg)*))
     };
 }
 
 macro_rules! log_warn {
     ($($arg:tt)*) => {
-        warn!("[{}] {}", thread_name(), format!($($arg)*))
+        warn!("[{}] {}", thread_identity(), format!($($arg)*))
     };
 }
 
 macro_rules! log_error {
     ($($arg:tt)*) => {
-        error!("[{}] {}", thread_name(), format!($($arg)*))
+        error!("[{}] {}", thread_identity(), format!($($arg)*))
     };
 }
 
