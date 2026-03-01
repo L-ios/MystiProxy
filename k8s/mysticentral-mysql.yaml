@@ -1,0 +1,100 @@
+# MystiCentral Deployment
+# 使用 MystiProxy 作为静态文件服务器
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysticentral-config
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8080
+    database:
+      # 使用 MySQL (本地有镜像)
+      url: mysql://mystiproxy:mystiproxy_secure_password_2024@mysql-service:3306/mystiproxy
+      max_connections: 10
+    auth:
+      jwt_secret: "your-super-secret-jwt-key-change-in-production"
+      token_expiry: 24h
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysticentral
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysticentral
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysticentral
+        app.kubernetes.io/component: backend
+    spec:
+      containers:
+        - name: mysticentral
+          image: mysticentral:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: RUST_LOG
+              value: "info,mysticentral=debug"
+            - name: DATABASE_URL
+              value: "mysql://mystiproxy:mystiproxy_secure_password_2024@mysql-service:3306/mystiproxy"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: mysticentral-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysticentral-service
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend

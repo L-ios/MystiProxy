@@ -1,0 +1,154 @@
+# MystiProxy Local Management Deployment
+# 使用 MystiProxy 本地管理模块 (SQLite)
+# 不需要外部数据库，使用 MystiProxy 自身的静态文件服务能力
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mystiproxy-local-config
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+data:
+  config.yaml: |
+    mysti:
+      engine:
+        static-server:
+          listen: tcp://0.0.0.0:8080
+          target: tcp://127.0.0.1:8080
+          proxy_type: http
+          locations:
+            - location: /
+              mode: Prefix
+              provider: static
+              alias: /app/frontend
+        management:
+          enabled: true
+          db_path: /app/data/mystiproxy.db
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mystiproxy-data-pvc
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: hostpath
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mystiproxy-local
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mystiproxy-local
+      app.kubernetes.io/component: mock-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mystiproxy-local
+        app.kubernetes.io/component: mock-server
+    spec:
+      containers:
+        - name: mystiproxy
+          image: mystiproxy:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: RUST_LOG
+              value: "info,http_proxy=debug"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+            - name: frontend
+              mountPath: /app/frontend
+              readOnly: true
+          command:
+            - /mystiproxy
+            - --config
+            - /app/config/config.yaml
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: mystiproxy-local-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: mystiproxy-data-pvc
+        - name: frontend
+          configMap:
+            name: frontend-static-files
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mystiproxy-local-service
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+---
+# NodePort for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: mystiproxy-local-external
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+      name: http
+  selector:
+    app.kubernetes.io/name: mystiproxy-local
+    app.kubernetes.io/component: mock-server

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mock-management
+  labels:
+    name: mock-management
+    app.kubernetes.io/name: mystiproxy
+    app.kubernetes.io/component: namespace

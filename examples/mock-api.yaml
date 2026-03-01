@@ -1,0 +1,21 @@
+# Mock API 配置
+# 模拟 API 响应用于测试
+mysti:
+  engine:
+    mock-server:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://127.0.0.1:8080
+      proxy_type: http
+      locations:
+        - location: /health
+          mode: Full
+          provider: mock
+          response:
+            status: 200
+            headers:
+              Content-Type:
+                value: "application/json"
+                action: overwrite
+            body:
+              type: static
+              content: '{"status": "healthy"}'

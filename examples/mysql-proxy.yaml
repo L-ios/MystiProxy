@@ -1,0 +1,9 @@
+# MySQL TCP 代理配置
+# 代理 MySQL 数据库连接
+mysti:
+  engine:
+    mysql:
+      listen: tcp://0.0.0.0:3307
+      target: tcp://127.0.0.1:3306
+      proxy_type: tcp
+      timeout: 30s

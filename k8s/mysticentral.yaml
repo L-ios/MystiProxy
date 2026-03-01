@@ -1,0 +1,199 @@
+# MystiCentral ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysticentral-config
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+data:
+  # Application configuration
+  APP_HOST: "0.0.0.0"
+  APP_PORT: "8080"
+  LOG_LEVEL: "info"
+  # Database configuration (host uses k8s service name)
+  DATABASE_HOST: "postgres-service"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "mystiproxy"
+  DATABASE_MAX_CONNECTIONS: "10"
+---
+# MystiCentral Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mysticentral-secret
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+type: Opaque
+stringData:
+  DATABASE_USER: "mystiproxy"
+  DATABASE_PASSWORD: "mystiproxy_secure_password_2024"
+  JWT_SECRET: "your-jwt-secret-key-change-in-production"
+---
+# MystiCentral Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysticentral
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysticentral
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysticentral
+        app.kubernetes.io/component: backend
+    spec:
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z postgres-service 5432; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+      containers:
+        - name: mysticentral
+          image: mysticentral:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: APP_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: APP_HOST
+            - name: APP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: APP_PORT
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: LOG_LEVEL
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: DATABASE_HOST
+            - name: DATABASE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: DATABASE_PORT
+            - name: DATABASE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: DATABASE_NAME
+            - name: DATABASE_MAX_CONNECTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: mysticentral-config
+                  key: DATABASE_MAX_CONNECTIONS
+            - name: DATABASE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mysticentral-secret
+                  key: DATABASE_USER
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysticentral-secret
+                  key: DATABASE_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mysticentral-secret
+                  key: JWT_SECRET
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+# MystiCentral Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysticentral-service
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+---
+# MystiCentral Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mysticentral-ingress
+  namespace: mock-management
+  labels:
+    app.kubernetes.io/name: mysticentral
+    app.kubernetes.io/component: backend
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.mystiproxy.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mysticentral-service
+                port:
+                  number: 8080

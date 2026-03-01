@@ -1,0 +1,13 @@
+# 静态文件服务配置
+# 提供静态资源访问
+mysti:
+  engine:
+    static-server:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://127.0.0.1:8080
+      proxy_type: http
+      locations:
+        - location: /static
+          mode: Prefix
+          provider: static
+          alias: /var/www/html

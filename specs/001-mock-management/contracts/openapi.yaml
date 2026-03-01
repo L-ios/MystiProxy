@@ -1,0 +1,1003 @@
+openapi: 3.0.3
+info:
+  title: HTTP Mock Management System API
+  description: API for managing mock configurations in MystiProxy
+  version: 1.0.0
+  contact:
+    name: MystiProxy Team
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Central Management Server
+  - url: http://localhost:9090/api/v1
+    description: MystiProxy Local API
+
+tags:
+  - name: Mocks
+    description: Mock configuration management
+  - name: Environments
+    description: Environment management
+  - name: Instances
+    description: MystiProxy instance management
+  - name: Sync
+    description: Synchronization operations
+  - name: Analytics
+    description: Usage analytics
+
+paths:
+  /mocks:
+    get:
+      tags: [Mocks]
+      summary: List mock configurations
+      parameters:
+        - name: environment
+          in: query
+          schema:
+            type: string
+          description: Filter by environment ID
+        - name: team
+          in: query
+          schema:
+            type: string
+          description: Filter by team ID
+        - name: path
+          in: query
+          schema:
+            type: string
+          description: Filter by path pattern
+        - name: method
+          in: query
+          schema:
+            type: string
+          description: Filter by HTTP method
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: List of mock configurations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockListResponse'
+    post:
+      tags: [Mocks]
+      summary: Create a mock configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MockCreateRequest'
+      responses:
+        '201':
+          description: Mock created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockConfiguration'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Mock with same path and method already exists
+
+  /mocks/{id}:
+    get:
+      tags: [Mocks]
+      summary: Get a mock configuration
+      parameters:
+        - $ref: '#/components/parameters/MockId'
+      responses:
+        '200':
+          description: Mock configuration details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockConfiguration'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Mocks]
+      summary: Update a mock configuration
+      parameters:
+        - $ref: '#/components/parameters/MockId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MockUpdateRequest'
+      responses:
+        '200':
+          description: Mock updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockConfiguration'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Conflict detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+    delete:
+      tags: [Mocks]
+      summary: Delete a mock configuration
+      parameters:
+        - $ref: '#/components/parameters/MockId'
+      responses:
+        '204':
+          description: Mock deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /mocks/import:
+    post:
+      tags: [Mocks]
+      summary: Import mock configurations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [yaml, json]
+                data:
+                  type: string
+                  description: Base64 encoded configuration data
+                merge_strategy:
+                  type: string
+                  enum: [replace, merge, skip]
+                  default: merge
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+
+  /mocks/export:
+    get:
+      tags: [Mocks]
+      summary: Export mock configurations
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [yaml, json]
+            default: yaml
+        - name: environment
+          in: query
+          schema:
+            type: string
+        - name: team
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Exported configurations
+          content:
+            application/yaml:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+
+  /environments:
+    get:
+      tags: [Environments]
+      summary: List environments
+      responses:
+        '200':
+          description: List of environments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnvironmentListResponse'
+    post:
+      tags: [Environments]
+      summary: Create an environment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnvironmentCreateRequest'
+      responses:
+        '201':
+          description: Environment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+
+  /environments/{id}:
+    get:
+      tags: [Environments]
+      summary: Get an environment
+      parameters:
+        - $ref: '#/components/parameters/EnvironmentId'
+      responses:
+        '200':
+          description: Environment details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Environment'
+    put:
+      tags: [Environments]
+      summary: Update an environment
+      parameters:
+        - $ref: '#/components/parameters/EnvironmentId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnvironmentUpdateRequest'
+      responses:
+        '200':
+          description: Environment updated
+    delete:
+      tags: [Environments]
+      summary: Delete an environment
+      parameters:
+        - $ref: '#/components/parameters/EnvironmentId'
+      responses:
+        '204':
+          description: Environment deleted
+
+  /instances:
+    get:
+      tags: [Instances]
+      summary: List MystiProxy instances
+      responses:
+        '200':
+          description: List of instances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceListResponse'
+
+  /instances/{id}:
+    get:
+      tags: [Instances]
+      summary: Get instance details
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      responses:
+        '200':
+          description: Instance details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MystiProxyInstance'
+    delete:
+      tags: [Instances]
+      summary: Unregister an instance
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      responses:
+        '204':
+          description: Instance unregistered
+
+  /instances/{id}/push:
+    post:
+      tags: [Instances]
+      summary: Push configurations to instance
+      parameters:
+        - $ref: '#/components/parameters/InstanceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                config_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                force:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Push initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResult'
+
+  /sync/pull:
+    post:
+      tags: [Sync]
+      summary: Pull configurations from central
+      description: Used by MystiProxy to fetch configurations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPullRequest'
+      responses:
+        '200':
+          description: Configurations to sync
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPullResponse'
+
+  /sync/push:
+    post:
+      tags: [Sync]
+      summary: Push local changes to central
+      description: Used by MystiProxy to sync local changes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncPushRequest'
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncPushResponse'
+
+  /sync/conflicts:
+    get:
+      tags: [Sync]
+      summary: List pending conflicts
+      responses:
+        '200':
+          description: List of conflicts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictListResponse'
+
+  /sync/conflicts/{id}/resolve:
+    post:
+      tags: [Sync]
+      summary: Resolve a conflict
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictResolveRequest'
+      responses:
+        '200':
+          description: Conflict resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MockConfiguration'
+
+  /analytics:
+    get:
+      tags: [Analytics]
+      summary: Get analytics data
+      parameters:
+        - name: mock_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: instance_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [hour, day, week]
+            default: day
+      responses:
+        '200':
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+
+components:
+  parameters:
+    MockId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Mock configuration ID
+
+    EnvironmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Environment ID
+
+    InstanceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Instance ID
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+  schemas:
+    MockConfiguration:
+      type: object
+      required:
+        - id
+        - name
+        - path
+        - method
+        - matching_rules
+        - response_config
+        - source
+        - version_vector
+        - content_hash
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        path:
+          type: string
+        method:
+          type: string
+        team_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        matching_rules:
+          $ref: '#/components/schemas/MatchingRules'
+        response_config:
+          $ref: '#/components/schemas/ResponseConfig'
+        state_config:
+          $ref: '#/components/schemas/StateConfig'
+        source:
+          type: string
+          enum: [central, local]
+        version_vector:
+          type: object
+          additionalProperties:
+            type: integer
+        content_hash:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+          format: uuid
+
+    MatchingRules:
+      type: object
+      properties:
+        path_pattern:
+          type: string
+        path_pattern_type:
+          type: string
+          enum: [exact, prefix, regex]
+        headers:
+          type: array
+          items:
+            $ref: '#/components/schemas/HeaderMatch'
+        query_params:
+          type: array
+          items:
+            $ref: '#/components/schemas/QueryParamMatch'
+        body:
+          $ref: '#/components/schemas/BodyMatch'
+
+    HeaderMatch:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        match_type:
+          type: string
+          enum: [exact, regex, exists]
+          default: exact
+
+    QueryParamMatch:
+      type: object
+      required: [name, value]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        match_type:
+          type: string
+          enum: [exact, regex, exists]
+          default: exact
+
+    BodyMatch:
+      type: object
+      properties:
+        json_path:
+          type: string
+        value:
+          type: string
+        match_type:
+          type: string
+          enum: [exact, regex, json_path]
+
+    ResponseConfig:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: integer
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body:
+          $ref: '#/components/schemas/ResponseBody'
+        delay_ms:
+          type: integer
+
+    ResponseBody:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [static, template, file, script]
+        content:
+          type: string
+        template_vars:
+          type: array
+          items:
+            $ref: '#/components/schemas/TemplateVar'
+
+    TemplateVar:
+      type: object
+      required: [name, source]
+      properties:
+        name:
+          type: string
+        source:
+          type: string
+          enum: [path, query, header, body]
+        path:
+          type: string
+
+    StateConfig:
+      type: object
+      properties:
+        initial_state:
+          type: string
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/StateTransition'
+
+    StateTransition:
+      type: object
+      required: [from_state, to_state]
+      properties:
+        from_state:
+          type: string
+        to_state:
+          type: string
+        trigger:
+          $ref: '#/components/schemas/StateTrigger'
+        response:
+          $ref: '#/components/schemas/ResponseConfig'
+
+    StateTrigger:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [request, body, header]
+        condition:
+          type: string
+
+    MockCreateRequest:
+      type: object
+      required: [name, path, method, matching_rules, response_config]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        method:
+          type: string
+        team_id:
+          type: string
+          format: uuid
+        environment_id:
+          type: string
+          format: uuid
+        matching_rules:
+          $ref: '#/components/schemas/MatchingRules'
+        response_config:
+          $ref: '#/components/schemas/ResponseConfig'
+        state_config:
+          $ref: '#/components/schemas/StateConfig'
+
+    MockUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        matching_rules:
+          $ref: '#/components/schemas/MatchingRules'
+        response_config:
+          $ref: '#/components/schemas/ResponseConfig'
+        state_config:
+          $ref: '#/components/schemas/StateConfig'
+        version_vector:
+          type: object
+          additionalProperties:
+            type: integer
+
+    MockListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MockConfiguration'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    Environment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+        is_template:
+          type: boolean
+        template_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EnvironmentCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+        template_id:
+          type: string
+          format: uuid
+
+    EnvironmentUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        endpoints:
+          type: object
+          additionalProperties:
+            type: string
+
+    EnvironmentListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Environment'
+
+    MystiProxyInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        endpoint_url:
+          type: string
+        sync_status:
+          type: string
+          enum: [connected, disconnected, syncing, conflict]
+        last_sync_at:
+          type: string
+          format: date-time
+        config_checksum:
+          type: string
+        registered_at:
+          type: string
+          format: date-time
+        last_heartbeat:
+          type: string
+          format: date-time
+
+    InstanceListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MystiProxyInstance'
+
+    PushResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        pushed_count:
+          type: integer
+        failed_count:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    SyncPullRequest:
+      type: object
+      properties:
+        instance_id:
+          type: string
+          format: uuid
+        last_sync_at:
+          type: string
+          format: date-time
+        local_checksums:
+          type: object
+          additionalProperties:
+            type: string
+
+    SyncPullResponse:
+      type: object
+      properties:
+        configs:
+          type: array
+          items:
+            $ref: '#/components/schemas/MockConfiguration'
+        deleted_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        server_time:
+          type: string
+          format: date-time
+
+    SyncPushRequest:
+      type: object
+      properties:
+        instance_id:
+          type: string
+          format: uuid
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChange'
+
+    SyncChange:
+      type: object
+      properties:
+        operation:
+          type: string
+          enum: [create, update, delete]
+        config:
+          $ref: '#/components/schemas/MockConfiguration'
+        deleted_id:
+          type: string
+          format: uuid
+
+    SyncPushResponse:
+      type: object
+      properties:
+        accepted:
+          type: array
+          items:
+            type: string
+            format: uuid
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictResponse'
+
+    ConflictResponse:
+      type: object
+      properties:
+        config_id:
+          type: string
+          format: uuid
+        local_version:
+          $ref: '#/components/schemas/MockConfiguration'
+        central_version:
+          $ref: '#/components/schemas/MockConfiguration'
+        detected_at:
+          type: string
+          format: date-time
+
+    ConflictListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConflictResponse'
+
+    ConflictResolveRequest:
+      type: object
+      required: [resolution]
+      properties:
+        resolution:
+          type: string
+          enum: [keep_local, keep_central, merge]
+        merged_config:
+          $ref: '#/components/schemas/MockConfiguration'
+
+    AnalyticsResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          properties:
+            total_requests:
+              type: integer
+            avg_response_time_ms:
+              type: number
+            error_rate:
+              type: number
+        timeseries:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              request_count:
+                type: integer
+              avg_response_time_ms:
+                type: number
+              error_count:
+                type: integer
+
+    ImportResult:
+      type: object
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    ValidationError:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
