@@ -74,7 +74,7 @@ rustls-pemfile = "2"
 webpki-roots = "0.26"
 
 # OpenSSL for legacy TLS 1.0/1.1 support
-openssl = "0.10"
+openssl = { version = "0.10", features = ["vendored"] }
 tokio-openssl = "0.6"
 
 # Async utilities
