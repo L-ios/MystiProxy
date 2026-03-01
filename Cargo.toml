@@ -84,9 +84,14 @@ url = "2"
 # Regex
 regex = "1"
 
+# Base64 encoding (for proxy auth)
+base64 = "0.22"
+
+# SHA256 (for password hashing)
+sha2 = "0.10"
+
 # Local management dependencies (feature-gated)
 sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "uuid", "chrono", "json"], optional = true }
-sha2 = { version = "0.10", optional = true }
 async-trait = { version = "0.1", optional = true }
 axum = { version = "0.7", optional = true }
 tower = { version = "0.4", features = ["util"], optional = true }
@@ -108,7 +113,6 @@ hot-reload = ["notify"]
 # Enable local management with SQLite
 local-management = [
     "dep:sqlx",
-    "dep:sha2",
     "dep:async-trait",
     "dep:axum",
     "dep:tower",

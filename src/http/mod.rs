@@ -6,6 +6,7 @@ mod auth;
 mod body;
 mod client;
 mod handler;
+mod proxy;
 mod server;
 mod static_files;
 
@@ -19,8 +20,11 @@ pub use auth::{
 pub use body::{read_json_body, write_json_body, BodyTransformer};
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
+pub use proxy::{
+    HttpProxyAcceptor, HttpProxyConfig, HttpProxyService, ProxyAuthConfig,
+};
 pub use server::{
-    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService, HttpServer, HttpServerConfig,
+    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService as SimpleHttpProxyService, HttpServer, HttpServerConfig,
 };
 pub use static_files::{StaticFileConfig, StaticFileService};
 
