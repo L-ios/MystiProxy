@@ -27,8 +27,8 @@ jobs:
 #            target: wasm32-unknown-emscripten
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
-#          - os: windows-latest
-#            target: x86_64-pc-windows-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
       - name: Get Git Commit ID
@@ -36,7 +36,8 @@ jobs:
         run: echo "GIT_COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
       - name: Install Rust toolchain
         run: rustup target add ${{ matrix.target }}
-      - name: Install build dependencies
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config upx
@@ -58,19 +59,22 @@ jobs:
         run: source ${{ env.EMSDK_ENV }}
       - name: Build Release
         run: cargo build --release --all --target ${{ matrix.target }}
-      - name: Strip Binary (if not wasm)
-        if: matrix.target != 'wasm32-unknown-emscripten'
+      - name: Strip Binary (Linux only)
+        if: runner.os == 'Linux'
         run: |
           find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec strip {} \;
           find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec upx --best {} \;
-      - name: Archive Release Build as ZIP
+      - name: Archive Release Build (Linux)
+        if: runner.os == 'Linux'
         run: |
           cd target/${{ matrix.target }}/release
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
-          else
-            zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip $(find . -maxdepth 1 -type f -executable)
-          fi
+          zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip $(find . -maxdepth 1 -type f -executable)
+
+      - name: Archive Release Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
