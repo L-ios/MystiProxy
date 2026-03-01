@@ -1,6 +1,6 @@
 //! Core data models for local mock management
 //!
-//! Re-exports shared models from mysti-common for use in http_proxy.
+//! Re-exports shared models from mysti-common for use in mystiproxy.
 
 // Re-export all models from mysti-common
 pub use mysti_common::{
@@ -14,9 +14,13 @@ pub use mysti_common::{
     MockConfiguration, MockFilter, MockCreateRequest, MockUpdateRequest,
     // Sync types
     SyncStatus, ConflictResolution,
+    // Additional types needed
+    BodyMatchType, ResponseBodyType as BodyType, ResponseBody,
+    HeaderMatch, QueryParamMatch, BodyMatch, MatchType, PathPatternType,
+    TemplateVarSource, TemplateVar,
 };
 
-// Additional request types specific to http_proxy
+// Additional request types specific to mystiproxy
 use serde::{Deserialize, Serialize};
 
 /// Request to create a new mock configuration (local-specific alias)

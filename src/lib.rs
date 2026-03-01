@@ -9,6 +9,12 @@ pub mod proxy;
 pub mod router;
 pub mod tls;
 
+#[cfg(feature = "local-management")]
+pub mod management;
+
+pub mod gateway;
+pub mod mocker;
+
 // 重导出常用类型
 pub use error::{MystiProxyError, Result};
 

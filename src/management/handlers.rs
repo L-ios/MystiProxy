@@ -7,6 +7,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
+    routing::{get, post},
+    Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -321,11 +323,6 @@ impl IntoResponse for ApiError {
 // ============================================================================
 // Router
 // ============================================================================
-
-use axum::{
-    routing::{get, post},
-    Router,
-};
 
 /// Create the management API router
 pub fn create_management_router(state: HandlerState) -> Router {

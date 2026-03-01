@@ -1,8 +1,13 @@
-use log::debug;
+//! HTTP Gateway module
+//!
+//! Provides URI mapping and routing capabilities for the HTTP proxy.
+
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use tracing::debug;
 
+/// URI mapping configuration
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct UriMapping {
     #[serde(
