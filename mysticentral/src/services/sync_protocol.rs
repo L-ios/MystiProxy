@@ -154,6 +154,7 @@ pub enum ConflictResolution {
 
 /// Request to resolve a conflict
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct ConflictResolveRequest {
     /// Resolution strategy
     pub strategy: ConflictResolution,

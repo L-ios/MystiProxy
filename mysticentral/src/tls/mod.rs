@@ -9,7 +9,7 @@
 mod openssl_server;
 mod reloader;
 
-pub use openssl_server::{OpenTlsAcceptor, OpenTlsStream};
+pub use openssl_server::OpenTlsAcceptor;
 pub use reloader::CertificateReloader;
 
 use crate::config::{TlsConfig as ConfigTlsConfig, TlsVersion};
@@ -221,6 +221,7 @@ impl TlsServer {
     }
 
     /// Get the current SSL context
+    #[allow(dead_code)]
     pub async fn context(&self) -> Arc<SslContext> {
         self.context.read().await.clone()
     }

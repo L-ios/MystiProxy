@@ -2,7 +2,6 @@ use log::debug;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::ops::Index;
 
 #[derive(Serialize, Deserialize, Default, Debug)]
 pub struct UriMapping {
@@ -23,6 +22,7 @@ pub struct UriMapping {
     target_service: Option<String>,
 }
 
+#[allow(dead_code)]
 struct UriWeight {
     item: Vec<Item>,
     /// `/a/b/c` 的权重是3
@@ -32,6 +32,7 @@ struct UriWeight {
     variable_count: usize,
 }
 
+#[allow(dead_code)]
 struct Item {
     /// 名称，可能是变量名称
     name: String,
@@ -44,6 +45,7 @@ struct Item {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct UriVariable {
     name: String,
     pattern: Option<String>,
@@ -53,6 +55,7 @@ struct UriVariable {
 }
 
 impl UriVariable {
+    #[allow(dead_code)]
     pub fn to_pattern(&self) -> String {
         match self.pattern.as_ref() {
             None => "[\\w|-]+".to_string(),
@@ -60,6 +63,7 @@ impl UriVariable {
         }
     }
 
+    #[allow(dead_code)]
     pub fn origin(&self) -> String {
         match self.pattern.as_ref() {
             None => format!("{{{}}}", self.name),
@@ -79,6 +83,7 @@ impl UriVariable {
 ///    a. 全量匹配
 ///    b. 前缀匹配
 #[derive(PartialEq, Debug)]
+#[allow(dead_code)]
 enum UriMatch {
     /// 全量匹配
     Exact,
@@ -93,6 +98,7 @@ enum UriMatch {
 }
 
 impl UriMapping {
+    #[allow(dead_code)]
     fn supports_method(&self, method: &str) -> bool {
         for mtd in &self.methods {
             if mtd.eq("*") {
@@ -105,6 +111,7 @@ impl UriMapping {
         false
     }
 
+    #[allow(dead_code)]
     fn uri_variable(uri: &str) -> HashMap<String, UriVariable> {
         let re = Regex::new(r"/\{(\w+):?([^}]*)}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
         let mut variable_patterns = HashMap::new();
@@ -147,6 +154,7 @@ impl UriMapping {
     /// # Returns
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
+    #[allow(dead_code)]
     fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
         debug!("uri: {}, in_uri: {}", self.uri, in_uri);
         let base_uri = self.uri.as_str();
@@ -214,6 +222,7 @@ impl UriMapping {
         }
     }
 
+    #[allow(dead_code)]
     fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
             UriMatch::Exact => Some(self.target_uri.clone()),

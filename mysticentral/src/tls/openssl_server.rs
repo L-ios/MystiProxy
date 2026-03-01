@@ -68,16 +68,19 @@ where
     T: AsyncRead + AsyncWrite + Unpin,
 {
     /// Get a reference to the inner stream
+    #[allow(dead_code)]
     pub fn get_ref(&self) -> &SslStream<T> {
         &self.inner
     }
 
     /// Get a mutable reference to the inner stream
+    #[allow(dead_code)]
     pub fn get_mut(&mut self) -> &mut SslStream<T> {
         &mut self.inner
     }
 
     /// Get the SSL connection object
+    #[allow(dead_code)]
     pub fn ssl(&self) -> &openssl::ssl::SslRef {
         self.inner.ssl()
     }
@@ -105,6 +108,7 @@ where
     }
 
     /// Get the cipher suite used for this connection
+    #[allow(dead_code)]
     pub fn cipher_name(&self) -> Option<&str> {
         self.inner.ssl().current_cipher().map(|c| c.name())
     }

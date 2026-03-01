@@ -24,6 +24,7 @@ pub type ConnectedClients = Arc<RwLock<HashMap<Uuid, WebSocketClient>>>;
 
 /// WebSocket client information
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WebSocketClient {
     pub instance_id: Uuid,
     pub tx: tokio::sync::mpsc::Sender<Message>,
@@ -32,6 +33,7 @@ pub struct WebSocketClient {
 /// WebSocket broadcaster for real-time updates
 #[derive(Debug, Clone)]
 pub struct WebSocketBroadcaster {
+    #[allow(dead_code)]
     clients: ConnectedClients,
 }
 
@@ -44,6 +46,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Add a client
+    #[allow(dead_code)]
     pub async fn add_client(&self, instance_id: Uuid, tx: tokio::sync::mpsc::Sender<Message>) {
         let mut clients = self.clients.write().await;
         clients.insert(instance_id, WebSocketClient { instance_id, tx });
@@ -51,6 +54,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Remove a client
+    #[allow(dead_code)]
     pub async fn remove_client(&self, instance_id: &Uuid) {
         let mut clients = self.clients.write().await;
         clients.remove(instance_id);
@@ -58,6 +62,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Broadcast a configuration update to all clients
+    #[allow(dead_code)]
     pub async fn broadcast_config_update(&self, config: &MockConfiguration) {
         let message = json!({
             "type": "config_update",
@@ -69,6 +74,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Broadcast a configuration deletion to all clients
+    #[allow(dead_code)]
     pub async fn broadcast_config_delete(&self, config_id: Uuid) {
         let message = json!({
             "type": "config_delete",
@@ -80,6 +86,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Send a message to a specific client
+    #[allow(dead_code)]
     pub async fn send_to_client(&self, instance_id: &Uuid, message: &str) -> bool {
         let clients = self.clients.read().await;
         if let Some(client) = clients.get(instance_id) {
@@ -90,6 +97,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Broadcast a message to all clients
+    #[allow(dead_code)]
     async fn broadcast_message(&self, message: &str) {
         let clients = self.clients.read().await;
         let mut failed = Vec::new();
@@ -107,6 +115,7 @@ impl WebSocketBroadcaster {
     }
 
     /// Get connected client count
+    #[allow(dead_code)]
     pub async fn client_count(&self) -> usize {
         self.clients.read().await.len()
     }
@@ -119,6 +128,7 @@ impl Default for WebSocketBroadcaster {
 }
 
 /// Handle WebSocket upgrade request
+#[allow(dead_code)]
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State((pool, broadcaster)): State<(PgPool, Arc<WebSocketBroadcaster>)>,
@@ -127,6 +137,7 @@ pub async fn ws_handler(
 }
 
 /// Handle a WebSocket connection
+#[allow(dead_code)]
 async fn handle_socket(socket: WebSocket, _pool: PgPool, broadcaster: Arc<WebSocketBroadcaster>) {
     let (mut tx, mut rx) = socket.split();
 
@@ -186,6 +197,7 @@ async fn handle_socket(socket: WebSocket, _pool: PgPool, broadcaster: Arc<WebSoc
 }
 
 /// Handle an incoming WebSocket message
+#[allow(dead_code)]
 async fn handle_incoming_message(
     broadcaster: &WebSocketBroadcaster,
     instance_id: Uuid,

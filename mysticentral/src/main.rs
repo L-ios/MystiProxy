@@ -9,7 +9,6 @@ use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

@@ -7,16 +7,13 @@ pub use mysti_common::{
     // Core types
     HttpMethod, MockSource, VersionVector,
     // Matching rules
-    MatchingRules, PathPatternType, MatchType, HeaderMatch, QueryParamMatch, BodyMatch,
-    BodyMatchType,
+    MatchingRules,
     // Response configuration
-    ResponseConfig, ResponseBody, ResponseBodyType, TemplateVar, TemplateVarSource,
-    // State machine
-    StateConfig, StateTransition, StateTrigger, StateTriggerType,
+    ResponseConfig,
     // Mock configuration
     MockConfiguration, MockFilter, MockCreateRequest, MockUpdateRequest,
     // Sync types
-    SyncStatus, SyncMessage, ConflictResolution,
+    SyncStatus, ConflictResolution,
 };
 
 // Additional request types specific to http_proxy

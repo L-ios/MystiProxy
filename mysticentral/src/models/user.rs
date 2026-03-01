@@ -51,6 +51,7 @@ pub struct User {
     pub username: String,
     pub email: String,
     #[serde(skip_serializing)]
+    #[allow(dead_code)]
     pub password_hash: String,
     pub role: UserRole,
     pub created_at: DateTime<Utc>,
@@ -59,6 +60,7 @@ pub struct User {
 
 impl User {
     /// Create a new user
+    #[allow(dead_code)]
     pub fn new(username: String, email: String, password_hash: String, role: UserRole) -> Self {
         let now = Utc::now();
         Self {
@@ -85,6 +87,7 @@ pub struct Team {
 
 impl Team {
     /// Create a new team
+    #[allow(dead_code)]
     pub fn new(name: String) -> Self {
         let now = Utc::now();
         Self {
@@ -109,7 +112,9 @@ pub struct TeamMember {
 /// Login request
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginRequest {
+    #[allow(dead_code)]
     pub username: String,
+    #[allow(dead_code)]
     pub password: String,
 }
 
@@ -144,19 +149,27 @@ impl From<User> for UserInfo {
 /// Create user request
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateUserRequest {
+    #[allow(dead_code)]
     pub username: String,
+    #[allow(dead_code)]
     pub email: String,
+    #[allow(dead_code)]
     pub password: String,
     #[serde(default)]
+    #[allow(dead_code)]
     pub role: UserRole,
 }
 
 /// Update user request
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateUserRequest {
+    #[allow(dead_code)]
     pub username: Option<String>,
+    #[allow(dead_code)]
     pub email: Option<String>,
+    #[allow(dead_code)]
     pub password: Option<String>,
+    #[allow(dead_code)]
     pub role: Option<UserRole>,
 }
 

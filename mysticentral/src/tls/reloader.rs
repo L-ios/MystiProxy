@@ -26,6 +26,7 @@ pub struct CertificateReloader {
     /// Current SSL context (shared with TlsServer)
     context: Arc<RwLock<Arc<openssl::ssl::SslContext>>>,
     /// File system watcher
+    #[allow(dead_code)]
     watcher: Option<RecommendedWatcher>,
 }
 
@@ -99,6 +100,7 @@ impl CertificateReloader {
     ///
     /// Returns a stream that yields when the certificate is reloaded.
     /// This is useful for triggering downstream updates.
+    #[allow(dead_code)]
     pub fn watch(&self) -> impl Stream<Item = Result<()>> {
         // This is a simplified implementation
         // A full implementation would use a channel to communicate reload events

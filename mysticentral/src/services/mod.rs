@@ -15,18 +15,15 @@ mod sync_protocol;
 mod sync_service;
 mod websocket;
 
-pub use auth_service::{AuthService, Claims, Permission, PermissionChecker};
-pub use conflict_service::{ConflictService, ConflictStore, StoredConflict};
+pub use auth_service::AuthService;
 pub use environment_repository::{EnvironmentRepository, PostgresEnvironmentRepository};
 pub use environment_service::EnvironmentService;
 pub use instance_repository::{InstanceRepository, PostgresInstanceRepository};
 pub use instance_service::InstanceService;
 pub use mock_service::MockService;
 pub use postgres_repository::PostgresMockRepository;
-pub use repository::{MockRepository, InMemoryMockRepository};
+pub use repository::MockRepository;
 pub use sync_protocol::{
-    SyncMessage, SyncSource, SyncConflict, ConflictReason, ConflictResolution,
-    ConflictResolveRequest, SyncPullResponse, SyncPushResponse,
+    SyncConflict, ConflictReason, ConflictResolution,
+    SyncPullResponse, SyncPushResponse,
 };
-pub use sync_service::SyncService;
-pub use websocket::{WebSocketBroadcaster, WebSocketClient, ws_handler};

@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
 use crate::models::{
-    HttpMethod, MockConfiguration, MockCreateRequest, MockFilter, MockUpdateRequest, VersionVector,
+    MockConfiguration, MockCreateRequest, MockFilter, MockUpdateRequest,
 };
 use crate::services::MockRepository;
 
@@ -170,6 +170,7 @@ impl<R: MockRepository> MockService<R> {
     }
 
     /// Find configurations by content hash
+    #[allow(dead_code)]
     pub async fn find_by_content_hash(&self, hash: &str) -> ApiResult<Option<MockConfiguration>> {
         let filter = MockFilter::default();
         let configs = self.repository.find_all(filter).await?;
@@ -180,8 +181,8 @@ impl<R: MockRepository> MockService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{MatchingRules, ResponseConfig};
-    use crate::services::InMemoryMockRepository;
+    use crate::models::{MatchingRules, ResponseConfig, HttpMethod};
+    use crate::services::repository::InMemoryMockRepository;
 
     #[tokio::test]
     async fn test_create_mock() {

@@ -94,6 +94,7 @@ impl<R: InstanceRepository> InstanceService<R> {
     }
 
     /// Get all healthy instances
+    #[allow(dead_code)]
     pub async fn get_healthy_instances(&self) -> ApiResult<Vec<MystiProxyInstance>> {
         let filter = InstanceFilter::default();
         let instances = self.repository.find_all(filter).await?;
@@ -101,6 +102,7 @@ impl<R: InstanceRepository> InstanceService<R> {
     }
 
     /// Update sync status
+    #[allow(dead_code)]
     pub async fn update_sync_status(
         &self,
         id: Uuid,

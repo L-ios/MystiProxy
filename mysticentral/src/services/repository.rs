@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::error::ApiError;
-use crate::models::{HttpMethod, MockConfiguration, MockFilter};
+use crate::models::{MockConfiguration, MockFilter};
 
 /// Repository trait for mock configuration persistence
 #[async_trait]
@@ -146,7 +146,7 @@ impl MockRepository for InMemoryMockRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{MatchingRules, ResponseConfig};
+    use crate::models::{MatchingRules, ResponseConfig, HttpMethod};
 
     #[tokio::test]
     async fn test_in_memory_repository_crud() {

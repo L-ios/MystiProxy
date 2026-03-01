@@ -17,6 +17,7 @@ pub type ConflictStore = Arc<RwLock<HashMap<Uuid, StoredConflict>>>;
 
 /// Stored conflict with metadata
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct StoredConflict {
     pub id: Uuid,
     pub config_id: Uuid,
@@ -46,6 +47,7 @@ impl From<SyncConflict> for StoredConflict {
 }
 
 /// Service for managing conflicts
+#[allow(dead_code)]
 pub struct ConflictService {
     store: ConflictStore,
 }
@@ -59,11 +61,13 @@ impl ConflictService {
     }
 
     /// Create with a shared store
+    #[allow(dead_code)]
     pub fn with_store(store: ConflictStore) -> Self {
         Self { store }
     }
 
     /// Store a new conflict
+    #[allow(dead_code)]
     pub async fn store_conflict(&self, conflict: SyncConflict) -> Uuid {
         let stored = StoredConflict::from(conflict);
         let id = stored.id;
@@ -76,12 +80,14 @@ impl ConflictService {
     }
 
     /// Get a conflict by ID
+    #[allow(dead_code)]
     pub async fn get_conflict(&self, id: Uuid) -> Option<StoredConflict> {
         let store = self.store.read().await;
         store.get(&id).cloned()
     }
 
     /// List all unresolved conflicts
+    #[allow(dead_code)]
     pub async fn list_unresolved(&self) -> Vec<StoredConflict> {
         let store = self.store.read().await;
         store
@@ -92,12 +98,14 @@ impl ConflictService {
     }
 
     /// List all conflicts
+    #[allow(dead_code)]
     pub async fn list_all(&self) -> Vec<StoredConflict> {
         let store = self.store.read().await;
         store.values().cloned().collect()
     }
 
     /// Resolve a conflict
+    #[allow(dead_code)]
     pub async fn resolve(
         &self,
         id: Uuid,
@@ -138,11 +146,13 @@ impl ConflictService {
     }
 
     /// Get conflict count
+    #[allow(dead_code)]
     pub async fn count(&self) -> usize {
         self.store.read().await.len()
     }
 
     /// Get unresolved conflict count
+    #[allow(dead_code)]
     pub async fn unresolved_count(&self) -> usize {
         self.store
             .read()
@@ -153,6 +163,7 @@ impl ConflictService {
     }
 
     /// Clear resolved conflicts older than a given time
+    #[allow(dead_code)]
     pub async fn cleanup_resolved(&self, older_than: DateTime<Utc>) -> usize {
         let mut store = self.store.write().await;
         let initial_len = store.len();

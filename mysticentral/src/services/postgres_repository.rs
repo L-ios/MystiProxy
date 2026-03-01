@@ -3,8 +3,7 @@
 //! Provides persistent storage for mock configurations using PostgreSQL.
 
 use async_trait::async_trait;
-use sqlx::{Acquire, PgPool, Postgres};
-use std::collections::HashMap;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::error::ApiError;

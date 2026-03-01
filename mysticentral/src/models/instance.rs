@@ -46,6 +46,7 @@ impl MystiProxyInstance {
     }
 
     /// Check if instance is healthy (heartbeat within last 60 seconds)
+    #[allow(dead_code)]
     pub fn is_healthy(&self) -> bool {
         match self.last_heartbeat {
             Some(heartbeat) => {
@@ -75,6 +76,7 @@ pub struct HeartbeatRequest {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct InstanceFilter {
     pub sync_status: Option<SyncStatus>,
+    #[allow(dead_code)]
     pub is_healthy: Option<bool>,
     pub page: Option<u32>,
     pub limit: Option<u32>,

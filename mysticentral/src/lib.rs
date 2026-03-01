@@ -15,10 +15,10 @@ pub use config::Config;
 pub use error::ApiError;
 pub use models::{
     MockConfiguration, MockFilter, VersionVector,
-    Environment, MystiProxyInstance, User, UserRole,
+    Environment, MystiProxyInstance,
 };
 pub use services::{
-    MockRepository, InMemoryMockRepository, PostgresMockRepository,
+    MockRepository, PostgresMockRepository,
     MockService, EnvironmentService, InstanceService,
-    SyncService, ConflictService, AuthService,
+    AuthService,
 };

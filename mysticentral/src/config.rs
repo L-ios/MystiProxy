@@ -226,7 +226,7 @@ impl Config {
 
     /// Load configuration from environment variables (legacy method)
     pub fn from_env() -> Result<Self> {
-        let args = CliArgs::parse();
+        let _args = CliArgs::parse();
         Self::from_args()
     }
 }

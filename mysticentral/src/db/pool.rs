@@ -9,12 +9,14 @@ use std::str::FromStr;
 
 /// Database configuration for connection pool
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
 }
 
 /// Create a new PostgreSQL connection pool
+#[allow(dead_code)]
 pub async fn create_pool(config: &DatabaseConfig) -> Result<PgPool> {
     let options = PgConnectOptions::from_str(&config.url)?;
     

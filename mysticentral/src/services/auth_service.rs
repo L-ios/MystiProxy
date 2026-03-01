@@ -26,6 +26,7 @@ pub struct Claims {
 
 impl Claims {
     /// Create new claims for a user
+    #[allow(dead_code)]
     pub fn new(user: &User, expires_in_hours: i64) -> Self {
         let now = Utc::now();
         let exp = now + Duration::hours(expires_in_hours);
@@ -43,9 +44,12 @@ impl Claims {
 /// Authentication service
 #[derive(Clone)]
 pub struct AuthService {
+    #[allow(dead_code)]
     jwt_secret: String,
     jwt_expiration_hours: i64,
+    #[allow(dead_code)]
     encoding_key: EncodingKey,
+    #[allow(dead_code)]
     decoding_key: DecodingKey,
 }
 
@@ -80,6 +84,7 @@ impl AuthService {
     }
 
     /// Generate a JWT token for a user
+    #[allow(dead_code)]
     pub fn generate_token(&self, user: &User) -> ApiResult<LoginResponse> {
         let claims = Claims::new(user, self.jwt_expiration_hours);
         let token = encode(&Header::default(), &claims, &self.encoding_key)
@@ -93,6 +98,7 @@ impl AuthService {
     }
 
     /// Validate a JWT token and return claims
+    #[allow(dead_code)]
     pub fn validate_token(&self, token: &str) -> ApiResult<Claims> {
         let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::default())
             .map_err(|e| {
@@ -121,6 +127,7 @@ impl AuthService {
     /// - Parameters
     /// - Salt
     /// - Hash
+    #[allow(dead_code)]
     pub fn hash_password(password: &str) -> ApiResult<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -132,6 +139,7 @@ impl AuthService {
     }
 
     /// Verify a password against a hash
+    #[allow(dead_code)]
     pub fn verify_password(password: &str, hash: &str) -> bool {
         let parsed_hash = match PasswordHash::new(hash) {
             Ok(h) => h,
@@ -157,10 +165,12 @@ impl std::fmt::Debug for AuthService {
 }
 
 /// Permission checking for RBAC
+#[allow(dead_code)]
 pub struct PermissionChecker;
 
 impl PermissionChecker {
     /// Check if a role has permission to perform an action
+    #[allow(dead_code)]
     pub fn can(role: UserRole, action: Permission) -> bool {
         match role {
             UserRole::Admin => true, // Admin can do everything
@@ -186,6 +196,7 @@ impl PermissionChecker {
     }
 
     /// Check if a user can modify a resource owned by another user
+    #[allow(dead_code)]
     pub fn can_modify(actor_role: UserRole, _actor_id: Uuid, _owner_id: Option<Uuid>) -> bool {
         matches!(actor_role, UserRole::Admin | UserRole::Editor)
     }
@@ -193,6 +204,7 @@ impl PermissionChecker {
 
 /// Permissions for RBAC
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum Permission {
     ReadMock,
     CreateMock,

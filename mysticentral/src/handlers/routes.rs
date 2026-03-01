@@ -27,6 +27,7 @@ use crate::services::{
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
+    #[allow(dead_code)]
     pub auth_service: AuthService,
 }
 

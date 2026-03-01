@@ -14,6 +14,7 @@ use crate::services::{
 };
 
 /// Service for handling synchronization
+#[allow(dead_code)]
 pub struct SyncService<MR: MockRepository, IR: InstanceRepository> {
     mock_repo: MR,
     instance_repo: IR,
@@ -21,11 +22,13 @@ pub struct SyncService<MR: MockRepository, IR: InstanceRepository> {
 
 impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     /// Create a new SyncService
+    #[allow(dead_code)]
     pub fn new(mock_repo: MR, instance_repo: IR) -> Self {
         Self { mock_repo, instance_repo }
     }
 
     /// Handle a pull request from an instance
+    #[allow(dead_code)]
     pub async fn handle_pull(
         &self,
         instance_id: Uuid,
@@ -70,6 +73,7 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     }
 
     /// Handle a push request from an instance
+    #[allow(dead_code)]
     pub async fn handle_push(
         &self,
         instance_id: Uuid,
@@ -109,6 +113,7 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     }
 
     /// Process a pushed configuration
+    #[allow(dead_code)]
     async fn process_pushed_config(&self, config: &MockConfiguration) -> Result<(), SyncConflict> {
         // Check if configuration exists
         match self.mock_repo.find_by_id(config.id).await {
@@ -180,6 +185,7 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     }
 
     /// Check if an instance needs to sync
+    #[allow(dead_code)]
     pub async fn needs_sync(&self, _instance_id: Uuid, checksum: &str) -> ApiResult<bool> {
         // Get all configurations and compute checksum
         let filter = MockFilter::default();
@@ -191,6 +197,7 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     }
 
     /// Compute a combined checksum for all configurations
+    #[allow(dead_code)]
     fn compute_combined_checksum(configs: &[MockConfiguration]) -> String {
         use sha2::{Digest, Sha256};
 
@@ -207,7 +214,7 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
 mod tests {
     use super::*;
     use crate::models::{MatchingRules, ResponseConfig};
-    use crate::services::InMemoryMockRepository;
+    use crate::services::repository::InMemoryMockRepository;
     use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::sync::RwLock;
