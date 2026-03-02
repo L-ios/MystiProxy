@@ -3,6 +3,7 @@ use clap::Parser;
 /// MystiProxy - 灵活的代理服务器
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
+#[command(arg_required_else_help = true)]
 pub struct MystiArg {
     /// 目标地址 (支持 tcp://, unix://)
     ///
