@@ -28,8 +28,6 @@ pub struct EngineConfig {
     pub listen: String,
     /// 目标地址 (支持 tcp://, unix://)
     pub target: String,
-    /// 代理类型
-    pub proxy_type: ProxyType,
     /// 超时时间
     #[serde(default, deserialize_with = "deserialize_option_duration")]
     pub timeout: Option<Duration>,
@@ -49,16 +47,6 @@ pub struct CertConfig {
     /// 根密钥
     #[serde(default)]
     pub root_key: String,
-}
-
-/// 代理类型
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum ProxyType {
-    /// TCP 代理
-    Tcp,
-    /// HTTP 代理
-    Http,
 }
 
 /// 位置配置

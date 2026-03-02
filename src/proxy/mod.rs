@@ -25,7 +25,7 @@ use std::time::Duration;
 
 use tracing::{error, info, warn};
 
-use crate::config::{EngineConfig, ProxyType};
+use crate::config::{EngineConfig};
 use crate::error::{MystiProxyError, Result};
 use crate::io::StreamListener;
 
@@ -36,8 +36,6 @@ pub struct ProxyConfig {
     pub listen: Address,
     /// 目标地址
     pub target: Address,
-    /// 代理类型
-    pub proxy_type: ProxyType,
     /// 超时时间
     pub timeout: Option<Duration>,
 }
@@ -51,7 +49,6 @@ impl ProxyConfig {
         Ok(Self {
             listen,
             target,
-            proxy_type: config.proxy_type.clone(),
             timeout: config.timeout,
         })
     }
@@ -83,8 +80,8 @@ impl ProxyServer {
     /// 启动代理服务器
     pub async fn start(&mut self) -> Result<()> {
         info!(
-            "Starting proxy server: {} -> {} ({:?})",
-            self.config.listen, self.config.target, self.config.proxy_type
+            "Starting proxy server: {} -> {}",
+            self.config.listen, self.config.target,
         );
 
         let listener = StreamListener::new(self.config.listen.to_string()).await?;

@@ -1,6 +1,6 @@
-use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
+use mystiproxy::config::{EngineConfig, MystiConfig};
 use mystiproxy::proxy::ProxyServer;
-use mystiproxy::Result;
+use mystiproxy::{set_engine_name, Result};
 use clap::Parser;
 use std::collections::HashMap;
 use tokio::signal;
@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::EnvFilter::new(
             std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
         ))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_thread_names(true).with_thread_ids(true))
         .init();
 
     tracing::info!("MystiProxy 启动中...");
@@ -54,15 +54,17 @@ async fn main() -> Result<()> {
                 }
 
                 info!(
-                    "代理引擎 '{}' 已启动: {} -> {} ({:?})",
+                    "代理引擎 '{}' 已启动: {} -> {}",
                     name_clone,
                     server.listen_addr(),
                     server.target_addr(),
-                    engine_config.proxy_type
                 );
 
                 // 将服务器运行任务添加到任务集合
+                let engine_name = name_clone.clone();
                 tasks.spawn(async move {
+                    // 设置引擎名称到线程上下文
+                    set_engine_name(&engine_name);
                     server.run().await
                 });
             }
@@ -126,7 +128,6 @@ fn load_config(args: &MystiArg) -> Result<MystiConfig> {
         let engine_config = EngineConfig {
             listen: listen.clone(),
             target: target.clone(),
-            proxy_type: ProxyType::Tcp,
             timeout: None,
             header: None,
             locations: None,
