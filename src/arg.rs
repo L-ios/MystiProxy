@@ -23,11 +23,11 @@ pub struct MystiArg {
     #[arg(short, long)]
     pub config: Option<String>,
 
-    /// 代理类型 (tcp, http)
+    /// 代理层 (transport, application)
     ///
-    /// 默认为 tcp
-    #[arg(long, default_value = "tcp")]
-    pub proxy_type: String,
+    /// 默认为 transport
+    #[arg(long, default_value = "transport")]
+    pub layer: String,
 
     /// 连接超时时间
     ///
