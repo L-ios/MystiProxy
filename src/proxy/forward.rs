@@ -217,7 +217,7 @@ mod tests {
 
         // 发送一些数据
         client.write_all(b"hello").await.unwrap();
-        
+
         // 关闭写入端
         client.shutdown().await.unwrap();
 
@@ -229,7 +229,10 @@ mod tests {
         .await;
 
         // 测试应该成功完成
-        assert!(result.is_ok(), "forward_bidirectional should complete within timeout");
+        assert!(
+            result.is_ok(),
+            "forward_bidirectional should complete within timeout"
+        );
     }
 
     #[tokio::test]

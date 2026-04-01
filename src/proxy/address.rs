@@ -60,9 +60,7 @@ impl Address {
                 let socket_addr: SocketAddr = address.parse()?;
                 Ok(Address::Tcp(socket_addr))
             }
-            "unix" => {
-                Ok(Address::Unix(PathBuf::from(address)))
-            }
+            "unix" => Ok(Address::Unix(PathBuf::from(address))),
             _ => Err(MystiProxyError::Other(format!(
                 "Unsupported protocol: {}",
                 protocol

@@ -184,10 +184,7 @@ impl Authenticator {
                 }
             }
             None => {
-                warn!(
-                    "Header 鉴权失败: 缺少认证头 '{}'",
-                    self.config.header_name
-                );
+                warn!("Header 鉴权失败: 缺少认证头 '{}'", self.config.header_name);
                 Ok(AuthResult {
                     authenticated: false,
                     user: None,
@@ -222,10 +219,7 @@ impl Authenticator {
                 }
             }
             None => {
-                warn!(
-                    "JWT 鉴权失败: 缺少认证头 '{}'",
-                    self.config.header_name
-                );
+                warn!("JWT 鉴权失败: 缺少认证头 '{}'", self.config.header_name);
                 return Ok(AuthResult {
                     authenticated: false,
                     user: None,
@@ -253,10 +247,7 @@ impl Authenticator {
         // 解码并验证 token
         match decode::<Claims>(&token, &decoding_key, &validation) {
             Ok(token_data) => {
-                debug!(
-                    "JWT 鉴权成功: user={}",
-                    token_data.claims.sub
-                );
+                debug!("JWT 鉴权成功: user={}", token_data.claims.sub);
 
                 // 将 claims 转换为 HashMap
                 let mut claims_map = HashMap::new();
@@ -273,16 +264,10 @@ impl Authenticator {
                     serde_json::Value::Number(token_data.claims.iat.into()),
                 );
                 if let Some(iss) = &token_data.claims.iss {
-                    claims_map.insert(
-                        "iss".to_string(),
-                        serde_json::Value::String(iss.clone()),
-                    );
+                    claims_map.insert("iss".to_string(), serde_json::Value::String(iss.clone()));
                 }
                 if let Some(aud) = &token_data.claims.aud {
-                    claims_map.insert(
-                        "aud".to_string(),
-                        serde_json::Value::String(aud.clone()),
-                    );
+                    claims_map.insert("aud".to_string(), serde_json::Value::String(aud.clone()));
                 }
                 // 添加其他自定义 claims
                 for (k, v) in &token_data.claims.other {

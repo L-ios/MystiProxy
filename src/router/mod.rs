@@ -68,7 +68,11 @@ pub struct Route {
 
 impl Route {
     /// 创建新的路由规则
-    pub fn new(pattern: String, mode: MatchMode, location_config: LocationConfig) -> crate::Result<Self> {
+    pub fn new(
+        pattern: String,
+        mode: MatchMode,
+        location_config: LocationConfig,
+    ) -> crate::Result<Self> {
         let compiled_regex = if mode == MatchMode::Regex || mode == MatchMode::PrefixRegex {
             Some(pattern_to_regex(&pattern, mode == MatchMode::Regex)?)
         } else {
@@ -93,9 +97,7 @@ pub struct Router {
 impl Router {
     /// 创建新的路由器
     pub fn new() -> Self {
-        Router {
-            routes: Vec::new(),
-        }
+        Router { routes: Vec::new() }
     }
 
     /// 添加路由规则
@@ -139,7 +141,7 @@ impl Router {
     /// 当 baseUri = /a/b/c/, in_uri = /a/b/c/d/e 时，返回 Some(MatchResult::Prefix { remaining: "d/e" })
     fn match_prefix(&self, route: &Route, uri: &str) -> Option<MatchResult> {
         let pattern = route.pattern.as_str();
-        
+
         // 检查是否是前缀匹配
         if !uri.starts_with(pattern) {
             return None;
@@ -147,7 +149,7 @@ impl Router {
 
         // 获取剩余部分
         let remaining = uri[pattern.len()..].to_string();
-        
+
         // 如果 pattern 以 / 结尾，remaining 应该去掉开头的 /
         // 但如果 pattern 不以 / 结尾，且 remaining 不为空，需要检查是否合理
         let remaining = if pattern.ends_with('/') {
@@ -171,10 +173,10 @@ impl Router {
     /// 当 baseUri = /a/{id}/c, in_uri = /a/b/c 时，返回 Some(MatchResult::Regex { params: {"id": "b"} })
     fn match_regex(&self, route: &Route, uri: &str) -> Option<MatchResult> {
         let regex = route.compiled_regex.as_ref()?;
-        
+
         if let Some(captures) = regex.captures(uri) {
             let mut params = HashMap::new();
-            
+
             // 提取所有命名捕获组
             for name in regex.capture_names() {
                 if let Some(name) = name {
@@ -183,7 +185,7 @@ impl Router {
                     }
                 }
             }
-            
+
             // 检查是否完全匹配（整个 URI）
             if captures.get(0).map(|m| m.as_str()) == Some(uri) {
                 Some(MatchResult::regex(params))
@@ -199,10 +201,10 @@ impl Router {
     /// 当 baseUri = /a/{id}/c/, in_uri = /a/b/c/d/e 时，返回 Some(MatchResult::PrefixRegex { params: {"id": "b"}, remaining: "d/e" })
     fn match_prefix_regex(&self, route: &Route, uri: &str) -> Option<MatchResult> {
         let regex = route.compiled_regex.as_ref()?;
-        
+
         if let Some(captures) = regex.captures(uri) {
             let mut params = HashMap::new();
-            
+
             // 提取所有命名捕获组
             for name in regex.capture_names() {
                 if let Some(name) = name {
@@ -211,25 +213,25 @@ impl Router {
                     }
                 }
             }
-            
+
             // 获取匹配的前缀部分
             let matched = captures.get(0)?.as_str();
-            
+
             // 确保匹配的是前缀
             if !uri.starts_with(matched) {
                 return None;
             }
-            
+
             // 获取剩余部分
             let remaining = uri[matched.len()..].to_string();
-            
+
             // 去掉开头的 /
             let remaining = if remaining.starts_with('/') {
                 remaining[1..].to_string()
             } else {
                 remaining
             };
-            
+
             Some(MatchResult::prefix_regex(params, remaining))
         } else {
             None
@@ -250,7 +252,7 @@ impl Default for Router {
 pub fn pattern_to_regex(pattern: &str, is_exact: bool) -> crate::Result<Regex> {
     let mut regex_str = String::from("^");
     let mut chars = pattern.chars().peekable();
-    
+
     while let Some(c) = chars.next() {
         if c == '{' {
             // 开始参数名
@@ -262,7 +264,7 @@ pub fn pattern_to_regex(pattern: &str, is_exact: bool) -> crate::Result<Regex> {
                 }
                 param_name.push(chars.next().unwrap());
             }
-            
+
             // 添加命名捕获组，匹配非 / 的字符
             regex_str.push_str(&format!(r"(?P<{}>[^/]+)", param_name));
         } else {
@@ -276,12 +278,12 @@ pub fn pattern_to_regex(pattern: &str, is_exact: bool) -> crate::Result<Regex> {
             }
         }
     }
-    
+
     // 对于完全匹配，添加 $ 结束符
     if is_exact {
         regex_str.push('$');
     }
-    
+
     Regex::new(&regex_str).map_err(|e| crate::MystiProxyError::InvalidRegex(e.to_string()))
 }
 
@@ -295,8 +297,7 @@ mod tests {
             location: "/test".to_string(),
             mode: MatchMode::Full,
             provider: Some(ProviderType::Static),
-            alias: None,
-            condition: None,
+            root: None,
             response: None,
             request: None,
         }
@@ -309,7 +310,8 @@ mod tests {
             "/a/b/c".to_string(),
             MatchMode::Full,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route);
 
         // 完全匹配
@@ -332,13 +334,14 @@ mod tests {
     #[test]
     fn test_prefix_match() {
         let mut router = Router::new();
-        
+
         // 测试根路径前缀
         let route1 = Route::new(
             "/".to_string(),
             MatchMode::Prefix,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route1);
 
         let result = router.match_uri("/a/b/c");
@@ -353,7 +356,8 @@ mod tests {
             "/a/b/c/".to_string(),
             MatchMode::Prefix,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router2.add_route(route2);
 
         let result = router2.match_uri("/a/b/c/d/e");
@@ -374,7 +378,8 @@ mod tests {
             "/a/{id}/c".to_string(),
             MatchMode::Regex,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route);
 
         // 匹配并提取参数
@@ -401,7 +406,8 @@ mod tests {
             "/a/{id}/c/".to_string(),
             MatchMode::PrefixRegex,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route);
 
         // 匹配并提取参数和剩余路径
@@ -441,7 +447,7 @@ mod tests {
         let regex = pattern_to_regex("/api/v1/users/{id}", true).unwrap();
         assert!(regex.is_match("/api/v1/users/123"));
         assert!(regex.is_match("/api/v1/users/abc"));
-        
+
         // 前缀匹配（不添加 $）
         let regex = pattern_to_regex("/a/{id}/c/", false).unwrap();
         assert!(regex.is_match("/a/b/c/d/e"));
@@ -455,7 +461,8 @@ mod tests {
             "/users/{user_id}/posts/{post_id}".to_string(),
             MatchMode::Regex,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route);
 
         let result = router.match_uri("/users/123/posts/456");
@@ -468,20 +475,22 @@ mod tests {
     #[test]
     fn test_router_priority() {
         let mut router = Router::new();
-        
+
         // 添加多个路由
         let route1 = Route::new(
             "/a/b/c".to_string(),
             MatchMode::Full,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route1);
 
         let route2 = Route::new(
             "/a/".to_string(),
             MatchMode::Prefix,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route2);
 
         // 完全匹配优先
@@ -505,7 +514,8 @@ mod tests {
             "/a/b/c/".to_string(),
             MatchMode::Prefix,
             create_test_location_config(),
-        ).unwrap();
+        )
+        .unwrap();
         router.add_route(route);
 
         let result = router.match_uri("/a/b/c/");

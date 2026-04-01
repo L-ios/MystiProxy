@@ -48,7 +48,7 @@ impl ProxyConfig {
             listen,
             target,
             proxy_type: config.proxy_type.clone(),
-            timeout: config.timeout,
+            timeout: config.request_timeout,
         })
     }
 }
@@ -112,7 +112,9 @@ impl ProxyServer {
 
                     // 为每个连接创建新的任务
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(stream, target_addr, timeout_duration).await {
+                        if let Err(e) =
+                            Self::handle_connection(stream, target_addr, timeout_duration).await
+                        {
                             error!("Connection error: {}", e);
                         }
                     });
@@ -140,8 +142,7 @@ impl ProxyServer {
             Ok(forward_result) => {
                 info!(
                     "Connection closed: sent {} bytes to target, {} bytes to client",
-                    forward_result.stats.client_to_target,
-                    forward_result.stats.target_to_client
+                    forward_result.stats.client_to_target, forward_result.stats.target_to_client
                 );
                 Ok(())
             }
@@ -197,7 +198,9 @@ impl TcpProxy {
                     let timeout_duration = self.timeout;
 
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(stream, target, timeout_duration).await {
+                        if let Err(e) =
+                            Self::handle_connection(stream, target, timeout_duration).await
+                        {
                             error!("Connection error: {}", e);
                         }
                     });
@@ -224,8 +227,7 @@ impl TcpProxy {
             Ok(forward_result) => {
                 info!(
                     "Connection closed: {} bytes to target, {} bytes to client",
-                    forward_result.stats.client_to_target,
-                    forward_result.stats.target_to_client
+                    forward_result.stats.client_to_target, forward_result.stats.target_to_client
                 );
                 Ok(())
             }
@@ -269,7 +271,8 @@ mod tests {
             listen: "tcp://0.0.0.0:3128".to_string(),
             target: "unix:///var/run/docker.sock".to_string(),
             proxy_type: ProxyType::Tcp,
-            timeout: Some(Duration::from_secs(10)),
+            request_timeout: Some(Duration::from_secs(10)),
+            connection_timeout: None,
             header: None,
             locations: None,
         };

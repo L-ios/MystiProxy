@@ -15,6 +15,26 @@ use tracing::{debug, error, info};
 use crate::error::{MystiProxyError, Result};
 use crate::io::SocketStream;
 
+/// 从目标地址字符串中提取 Host 值
+///
+/// 支持格式：
+/// - `"tcp://host:port"` → `"host:port"`
+/// - `"unix:///path/to/socket"` → `"localhost"`
+/// - `"host:port"` → `"host:port"`
+fn extract_host_from_target(target: &str) -> Option<String> {
+    if target.starts_with("unix://") {
+        return Some("localhost".to_string());
+    }
+
+    let addr = target.strip_prefix("tcp://").unwrap_or(target);
+
+    if addr.is_empty() {
+        return None;
+    }
+
+    Some(addr.to_string())
+}
+
 /// HTTP 客户端连接
 pub struct HttpClient {
     /// 目标地址
@@ -72,9 +92,18 @@ impl HttpClient {
             .method(request.method().clone())
             .uri(new_uri);
 
-        // 复制所有请求头
+        let mut has_host_header = false;
         for (name, value) in request.headers() {
+            if name == "host" {
+                has_host_header = true;
+            }
             new_request = new_request.header(name, value);
+        }
+
+        if !has_host_header {
+            if let Some(host) = extract_host_from_target(&self.target) {
+                new_request = new_request.header("Host", &host);
+            }
         }
 
         let new_request = new_request
@@ -183,5 +212,34 @@ mod tests {
     fn test_http_client_pool_creation() {
         let pool = HttpClientPool::new();
         assert!(true);
+    }
+
+    #[test]
+    fn test_extract_host_from_target_tcp() {
+        assert_eq!(
+            extract_host_from_target("tcp://127.0.0.1:8080"),
+            Some("127.0.0.1:8080".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_host_from_target_unix() {
+        assert_eq!(
+            extract_host_from_target("unix:///var/run/docker.sock"),
+            Some("localhost".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_host_from_target_bare_host_port() {
+        assert_eq!(
+            extract_host_from_target("localhost:3000"),
+            Some("localhost:3000".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_host_from_target_empty() {
+        assert_eq!(extract_host_from_target(""), None);
     }
 }

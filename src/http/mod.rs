@@ -13,9 +13,7 @@ use http_body_util::BodyExt;
 use hyper::body::{Bytes, Incoming};
 
 // 重导出公共接口
-pub use auth::{
-    AuthConfig, AuthResult, AuthType, Authenticator, Claims,
-};
+pub use auth::{AuthConfig, AuthResult, AuthType, Authenticator, Claims};
 pub use body::{read_json_body, write_json_body, BodyTransformer};
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
