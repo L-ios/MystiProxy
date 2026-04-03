@@ -128,9 +128,8 @@ where
         if let Some(duration) = timeout {
             match tokio::time::timeout(duration, conn).await {
                 Ok(result) => {
-                    result.map_err(|e| {
-                        MystiProxyError::Proxy(format!("Connection error: {}", e))
-                    })?;
+                    result
+                        .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {}", e)))?;
                 }
                 Err(_) => {
                     warn!("Connection timed out after {:?}", duration);
@@ -138,9 +137,8 @@ where
                 }
             }
         } else {
-            conn.await.map_err(|e| {
-                MystiProxyError::Proxy(format!("Connection error: {}", e))
-            })?;
+            conn.await
+                .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {}", e)))?;
         }
 
         Ok(())
@@ -169,9 +167,7 @@ impl HttpProxyService {
 
     /// 创建完整响应体
     fn full_body(bytes: Bytes) -> BoxBody {
-        Full::new(bytes)
-            .map_err(|never| match never {})
-            .boxed()
+        Full::new(bytes).map_err(|never| match never {}).boxed()
     }
 }
 
@@ -214,9 +210,7 @@ impl Service<Request<Incoming>> for HttpProxyService {
                 .map_err(|e| MystiProxyError::Http(e))?;
 
             // 构建新请求
-            let mut new_request = Request::builder()
-                .method(req.method().clone())
-                .uri(new_uri);
+            let mut new_request = Request::builder().method(req.method().clone()).uri(new_uri);
 
             // 复制请求头
             for (name, value) in req.headers() {

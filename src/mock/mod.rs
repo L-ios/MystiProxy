@@ -13,11 +13,17 @@ use regex::Regex;
 use serde_json::Value;
 use tracing::{debug, info, warn};
 
-use crate::config::{BodyType, Condition, HeaderActionType, LocationConfig, MatchMode, ResponseConfig};
+use crate::config::{BodyType, HeaderActionType, LocationConfig, MatchMode, ResponseConfig};
 use crate::error::{MystiProxyError, Result};
 
 /// BoxBody 类型别名
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Infallible>;
+
+#[derive(Debug, Clone)]
+pub struct Condition {
+    pub condition_type: String,
+    pub value: String,
+}
 
 /// Mock 响应
 #[derive(Debug, Clone)]
@@ -179,7 +185,8 @@ impl MockBuilder {
     /// - 正则匹配: `key=regex:pattern`
     fn matches_query(uri: &str, pattern: &str) -> bool {
         // 解析 URI，提取查询参数
-        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri)) {
+        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri))
+        {
             parsed.query().unwrap_or("").to_string()
         } else {
             // 尝试从 URI 中提取查询部分
@@ -372,9 +379,10 @@ impl MockBuilder {
     /// # 返回
     /// 成功返回 Response<BoxBody>，失败返回错误
     pub fn build_response(config: &ResponseConfig) -> Result<Response<BoxBody>> {
-        let mut builder = Response::builder()
-            .status(StatusCode::from_u16(config.status.unwrap_or(200))
-                .map_err(|e| MystiProxyError::Mock(format!("Invalid status code: {}", e)))?);
+        let mut builder = Response::builder().status(
+            StatusCode::from_u16(config.status.unwrap_or(200))
+                .map_err(|e| MystiProxyError::Mock(format!("Invalid status code: {}", e)))?,
+        );
 
         // 添加 headers
         if let Some(headers) = &config.headers {
@@ -402,8 +410,11 @@ impl MockBuilder {
                         // JSON 响应体
                         if let Some(json_config) = &body_config.json {
                             // 尝试解析为 JSON，如果失败则作为字符串
-                            let body_str = if let Ok(value) = serde_json::from_str::<Value>(&json_config.value) {
-                                serde_json::to_string(&value).unwrap_or_else(|_| json_config.value.clone())
+                            let body_str = if let Ok(value) =
+                                serde_json::from_str::<Value>(&json_config.value)
+                            {
+                                serde_json::to_string(&value)
+                                    .unwrap_or_else(|_| json_config.value.clone())
                             } else {
                                 json_config.value.clone()
                             };
@@ -432,9 +443,7 @@ impl MockBuilder {
 
     /// 创建完整响应体
     fn full_body(bytes: Bytes) -> BoxBody {
-        Full::new(bytes)
-            .map_err(|never| match never {})
-            .boxed()
+        Full::new(bytes).map_err(|never| match never {}).boxed()
     }
 }
 
@@ -458,9 +467,10 @@ impl MockLocation {
     pub fn from_config(config: &LocationConfig) -> Result<Self> {
         // 编译正则表达式（如果需要）
         let regex = if config.mode == MatchMode::Regex || config.mode == MatchMode::PrefixRegex {
-            Some(Regex::new(&config.location).map_err(|e| {
-                MystiProxyError::Mock(format!("Invalid regex pattern: {}", e))
-            })?)
+            Some(
+                Regex::new(&config.location)
+                    .map_err(|e| MystiProxyError::Mock(format!("Invalid regex pattern: {}", e)))?,
+            )
         } else {
             None
         };
@@ -476,7 +486,7 @@ impl MockLocation {
             location: config.location.clone(),
             mode: config.mode.clone(),
             regex,
-            conditions: config.condition.clone().unwrap_or_default(),
+            conditions: vec![],
             response,
         })
     }
@@ -486,7 +496,11 @@ impl MockLocation {
         match self.mode {
             MatchMode::Full => path == self.location,
             MatchMode::Prefix => path.starts_with(&self.location),
-            MatchMode::Regex => self.regex.as_ref().map(|r| r.is_match(path)).unwrap_or(false),
+            MatchMode::Regex => self
+                .regex
+                .as_ref()
+                .map(|r| r.is_match(path))
+                .unwrap_or(false),
             MatchMode::PrefixRegex => {
                 // 前缀正则匹配：先检查前缀，再用正则匹配剩余部分
                 if path.starts_with(&self.location) {
@@ -501,12 +515,7 @@ impl MockLocation {
     }
 
     /// 检查请求是否完全匹配（路径 + 条件）
-    pub fn matches_request(
-        &self,
-        uri: &str,
-        headers: &HeaderMap,
-        body: Option<&Value>,
-    ) -> bool {
+    pub fn matches_request(&self, uri: &str, headers: &HeaderMap, body: Option<&Value>) -> bool {
         // 首先检查路径匹配
         let path = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri)) {
             parsed.path().to_string()
@@ -649,7 +658,10 @@ mod tests {
 
         assert_eq!(response.status, 201);
         assert_eq!(response.body, "test body");
-        assert_eq!(response.headers.get("Content-Type"), Some(&"application/json".to_string()));
+        assert_eq!(
+            response.headers.get("Content-Type"),
+            Some(&"application/json".to_string())
+        );
         assert_eq!(response.delay_ms, 100);
     }
 
@@ -668,8 +680,14 @@ mod tests {
 
     #[test]
     fn test_matches_uri_regex() {
-        assert!(MockBuilder::matches_uri("/api/test/123", "regex:/api/test/\\d+"));
-        assert!(!MockBuilder::matches_uri("/api/test/abc", "regex:/api/test/\\d+"));
+        assert!(MockBuilder::matches_uri(
+            "/api/test/123",
+            "regex:/api/test/\\d+"
+        ));
+        assert!(!MockBuilder::matches_uri(
+            "/api/test/abc",
+            "regex:/api/test/\\d+"
+        ));
     }
 
     #[test]
@@ -682,12 +700,24 @@ mod tests {
         assert!(MockBuilder::matches_header(&headers, "Content-Type"));
 
         // 值匹配
-        assert!(MockBuilder::matches_header(&headers, "Content-Type=application/json"));
-        assert!(!MockBuilder::matches_header(&headers, "Content-Type=text/html"));
+        assert!(MockBuilder::matches_header(
+            &headers,
+            "Content-Type=application/json"
+        ));
+        assert!(!MockBuilder::matches_header(
+            &headers,
+            "Content-Type=text/html"
+        ));
 
         // 正则匹配
-        assert!(MockBuilder::matches_header(&headers, "Authorization=regex:Bearer .*"));
-        assert!(!MockBuilder::matches_header(&headers, "Authorization=regex:Basic .*"));
+        assert!(MockBuilder::matches_header(
+            &headers,
+            "Authorization=regex:Bearer .*"
+        ));
+        assert!(!MockBuilder::matches_header(
+            &headers,
+            "Authorization=regex:Basic .*"
+        ));
     }
 
     #[test]
@@ -724,7 +754,10 @@ mod tests {
         assert!(!MockBuilder::matches_body(Some(&body), "$.name=jane"));
 
         // 嵌套字段
-        assert!(MockBuilder::matches_body(Some(&body), "$.address.city=New York"));
+        assert!(MockBuilder::matches_body(
+            Some(&body),
+            "$.address.city=New York"
+        ));
 
         // 正则匹配
         assert!(MockBuilder::matches_body(Some(&body), "$.name=regex:j.*"));
@@ -750,17 +783,25 @@ mod tests {
             },
         ];
 
-        assert!(MockBuilder::matches_conditions("/api/test", &headers, Some(&body), &conditions));
+        assert!(MockBuilder::matches_conditions(
+            "/api/test",
+            &headers,
+            Some(&body),
+            &conditions
+        ));
 
         // 测试条件不匹配
-        let conditions2 = vec![
-            Condition {
-                condition_type: "header".to_string(),
-                value: "Authorization=Basic token123".to_string(),
-            },
-        ];
+        let conditions2 = vec![Condition {
+            condition_type: "header".to_string(),
+            value: "Authorization=Basic token123".to_string(),
+        }];
 
-        assert!(!MockBuilder::matches_conditions("/api/test", &headers, Some(&body), &conditions2));
+        assert!(!MockBuilder::matches_conditions(
+            "/api/test",
+            &headers,
+            Some(&body),
+            &conditions2
+        ));
     }
 
     #[test]
@@ -861,8 +902,14 @@ mod tests {
 
     #[test]
     fn test_urlencoding_decode() {
-        assert_eq!(urlencoding::decode("hello%20world"), Some("hello world".to_string()));
-        assert_eq!(urlencoding::decode("name=john&age=30"), Some("name=john&age=30".to_string()));
+        assert_eq!(
+            urlencoding::decode("hello%20world"),
+            Some("hello world".to_string())
+        );
+        assert_eq!(
+            urlencoding::decode("name=john&age=30"),
+            Some("name=john&age=30".to_string())
+        );
         assert_eq!(urlencoding::decode("a+b"), Some("a b".to_string()));
     }
 }

@@ -19,6 +19,9 @@ pub mod mocker;
 // 重导出常用类型
 pub use error::{MystiProxyError, Result};
 
+// 重导出 HTTP 相关类型
+pub use http::{HttpServer, HttpServerConfig};
+
 // 重导出 Mock 相关类型
 pub use mock::{MockBuilder, MockLocation, MockResponse, MockService};
 

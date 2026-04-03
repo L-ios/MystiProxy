@@ -28,9 +28,18 @@ pub struct EngineConfig {
     pub listen: String,
     /// 目标地址 (支持 tcp://, unix://)
     pub target: String,
-    /// 超时时间
+    /// 代理类型
+    pub proxy_type: ProxyType,
+    /// 请求超时时间（完整代理操作）
+    #[serde(
+        default,
+        deserialize_with = "deserialize_option_duration",
+        alias = "timeout"
+    )]
+    pub request_timeout: Option<Duration>,
+    /// 连接超时时间
     #[serde(default, deserialize_with = "deserialize_option_duration")]
-    pub timeout: Option<Duration>,
+    pub connection_timeout: Option<Duration>,
     /// 请求头配置
     #[serde(default)]
     pub header: Option<HashMap<String, HeaderAction>>,
@@ -49,6 +58,16 @@ pub struct CertConfig {
     pub root_key: String,
 }
 
+/// 代理类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyType {
+    /// TCP 代理
+    Tcp,
+    /// HTTP 代理
+    Http,
+}
+
 /// 位置配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocationConfig {
@@ -59,16 +78,10 @@ pub struct LocationConfig {
     /// 提供者类型
     #[serde(default)]
     pub provider: Option<ProviderType>,
-    /// 别名
     #[serde(default)]
-    pub alias: Option<String>,
-    /// 条件
-    #[serde(default)]
-    pub condition: Option<Vec<Condition>>,
-    /// 响应配置
+    pub root: Option<String>,
     #[serde(default)]
     pub response: Option<ResponseConfig>,
-    /// 请求配置
     #[serde(default)]
     pub request: Option<RequestConfig>,
 }
@@ -98,16 +111,6 @@ pub enum ProviderType {
     Mock,
     /// 代理提供者
     Proxy,
-}
-
-/// 条件配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Condition {
-    /// 条件类型
-    #[serde(rename = "type")]
-    pub condition_type: String,
-    /// 条件值
-    pub value: String,
 }
 
 /// 头部动作配置
@@ -289,68 +292,6 @@ impl MystiConfig {
     }
 }
 
-// ============================================================================
-// 保留旧的配置结构以保持向后兼容性
-// ============================================================================
-
-/// 代理服务器配置（旧版本，保留向后兼容）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    /// 监听地址
-    pub listen: std::net::SocketAddr,
-    /// TLS 配置
-    pub tls: Option<TlsConfig>,
-    /// 路由规则
-    pub routes: Vec<RouteConfig>,
-}
-
-/// TLS 配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TlsConfig {
-    /// 证书文件路径
-    pub cert: String,
-    /// 私钥文件路径
-    pub key: String,
-}
-
-/// 路由配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RouteConfig {
-    /// 路由匹配规则
-    pub pattern: String,
-    /// 目标地址
-    pub target: Option<String>,
-    /// Mock 配置
-    pub mock: Option<MockConfig>,
-}
-
-/// Mock 配置
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MockConfig {
-    /// 响应状态码
-    pub status: Option<u16>,
-    /// 响应头
-    pub headers: Option<std::collections::HashMap<String, String>>,
-    /// 响应体
-    pub body: Option<String>,
-    /// 延迟（毫秒）
-    pub delay_ms: Option<u64>,
-}
-
-impl Config {
-    /// 从 YAML 文件加载配置
-    pub fn from_yaml_file(path: &str) -> crate::Result<Self> {
-        let content = std::fs::read_to_string(path)?;
-        Self::from_yaml(&content)
-    }
-
-    /// 从 YAML 字符串解析配置
-    pub fn from_yaml(yaml: &str) -> crate::Result<Self> {
-        let config: Config = serde_yaml::from_str(yaml)?;
-        Ok(config)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,7 +302,10 @@ mod tests {
         assert_eq!(parse_duration("5m").unwrap(), Duration::from_secs(300));
         assert_eq!(parse_duration("1h").unwrap(), Duration::from_secs(3600));
         assert_eq!(parse_duration("500ms").unwrap(), Duration::from_millis(500));
-        assert_eq!(parse_duration("1.5s").unwrap(), Duration::from_secs_f64(1.5));
+        assert_eq!(
+            parse_duration("1.5s").unwrap(),
+            Duration::from_secs_f64(1.5)
+        );
     }
 
     #[test]
@@ -411,7 +355,7 @@ cert:
         assert_eq!(docker_config.listen, "tcp://0.0.0.0:3128");
         assert_eq!(docker_config.target, "unix:///var/run/docker.sock");
         assert_eq!(docker_config.proxy_type, ProxyType::Http);
-        assert_eq!(docker_config.timeout, Some(Duration::from_secs(10)));
+        assert_eq!(docker_config.request_timeout, Some(Duration::from_secs(10)));
         assert!(docker_config.header.is_some());
         assert!(docker_config.locations.is_some());
         let locations = docker_config.locations.as_ref().unwrap();
@@ -473,7 +417,9 @@ cert:
             "Regex"
         );
         assert_eq!(
-            serde_yaml::to_string(&MatchMode::PrefixRegex).unwrap().trim(),
+            serde_yaml::to_string(&MatchMode::PrefixRegex)
+                .unwrap()
+                .trim(),
             "PrefixRegex"
         );
     }
@@ -552,22 +498,22 @@ cert:
     root_key: ""
 "#;
         let config: MystiConfig = serde_yaml::from_str(yaml).unwrap();
-        
+
         // 验证 docker 引擎配置
         assert!(config.mysti.engine.contains_key("docker"));
         let docker_config = &config.mysti.engine["docker"];
         assert_eq!(docker_config.listen, "tcp://0.0.0.0:3128");
         assert_eq!(docker_config.target, "unix:///var/run/docker.sock");
         assert_eq!(docker_config.proxy_type, ProxyType::Http);
-        assert_eq!(docker_config.timeout, Some(Duration::from_secs(10)));
-        
+        assert_eq!(docker_config.request_timeout, Some(Duration::from_secs(10)));
+
         // 验证 containerd 引擎配置
         assert!(config.mysti.engine.contains_key("containerd"));
         let containerd_config = &config.mysti.engine["containerd"];
         assert_eq!(containerd_config.listen, "tcp://0.0.0.0:3129");
         assert_eq!(containerd_config.target, "tcp://127.0.0.1:2765");
         assert_eq!(containerd_config.proxy_type, ProxyType::Tcp);
-        
+
         // 验证证书配置
         assert_eq!(config.cert.len(), 1);
         assert_eq!(config.cert[0].name, "client1");

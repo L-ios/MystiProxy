@@ -1,29 +1,285 @@
-# MystiProxy Development Guidelines
+# AGENTS.md - MystiProxy Development Guide
 
-Auto-generated from all feature plans. Last updated: 2026-03-01
+This document provides essential information for AI coding agents working in the MystiProxy codebase.
 
-## Active Technologies
+## Project Overview
 
-- Rust 1.75+ (Edition 2021), TypeScript 5.x (001-mock-management)
+MystiProxy is a flexible HTTP/TCP proxy server with mock support, written in Rust (edition 2021). It supports:
+- 4-layer TCP/Unix socket forwarding
+- 7-layer HTTP proxying with request/response transformation
+- Mock responses for testing
+- Static file serving
+- TLS support
+- Multiple routing modes (Full, Prefix, Regex, PrefixRegex)
 
-## Project Structure
+## Build Commands
 
-```text
-src/
-tests/
+### Build the project
+```bash
+cargo build
+cargo build --release
 ```
 
-## Commands
+### Run the application
+```bash
+./target/release/mystiproxy
+./target/release/mystiproxy --config config.yaml
+RUST_LOG=debug ./target/release/mystiproxy
+```
 
-cargo test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] cargo clippy
+## Test Commands
 
-## Code Style
+### Run all tests
+```bash
+cargo test
+cargo test --all
+```
 
-Rust 1.75+ (Edition 2021), TypeScript 5.x: Follow standard conventions
+### Run a single test
+```bash
+cargo test test_name
+cargo test test_parse_duration
+cargo test test_route_match_full
+```
 
-## Recent Changes
+### Run tests with verbose output
+```bash
+cargo test -- --nocapture
+cargo test --verbose
+```
 
-- 001-mock-management: Added Rust 1.75+ (Edition 2021), TypeScript 5.x
+### Run tests in a specific module
+```bash
+cargo test config::tests
+cargo test http::handler::tests
+```
 
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+## Lint and Format Commands
+
+### Format code
+```bash
+cargo fmt
+cargo fmt -- --check
+```
+
+### Run Clippy linter
+```bash
+cargo clippy
+cargo clippy --all-targets --all-features
+cargo clippy --fix
+```
+
+### Type check without building
+```bash
+cargo check
+```
+
+## Code Style Guidelines
+
+### Imports Organization
+Organize imports in this order, separated by blank lines:
+1. Standard library imports (`use std::...`)
+2. External crate imports (`use tokio::...`, `use hyper::...`)
+3. Internal crate imports (`use crate::...`)
+
+Example:
+```rust
+use std::sync::Arc;
+use std::time::Duration;
+
+use bytes::Bytes;
+use hyper::body::Incoming;
+use tracing::{debug, info};
+
+use crate::error::{MystiProxyError, Result};
+use crate::config::EngineConfig;
+```
+
+### Module Structure
+- Use module-level doc comments (`//!`) at the top of mod.rs files
+- Use `//` for inline comments, `///` for doc comments
+- Re-export public APIs in mod.rs using `pub use`
+- Group private modules first, then re-exports
+
+Example:
+```rust
+//! HTTP 处理模块
+//!
+//! 提供 HTTP 代理的核心功能
+
+mod handler;
+mod client;
+
+pub use handler::HttpRequestHandler;
+pub use client::HttpClient;
+```
+
+### Naming Conventions
+- **Types**: PascalCase (`HttpRequestHandler`, `ProxyConfig`)
+- **Functions/Methods**: snake_case (`send_request`, `establish_connection`)
+- **Variables**: snake_case (`let client_pool = ...`)
+- **Constants**: SCREAMING_SNAKE_CASE (`const MAX_CONNECTIONS: usize = 100`)
+- **Modules**: snake_case (`mod http_client`)
+- **Type aliases**: PascalCase (`pub type BoxBody = ...`)
+
+### Struct and Enum Design
+- Use `#[derive]` attributes for common traits
+- Place `#[derive]` on a single line with multiple traits
+- Use `pub` for public fields, private fields should come first if mixed
+
+Example:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineConfig {
+    pub listen: String,
+    pub target: String,
+    #[serde(default)]
+    pub timeout: Option<Duration>,
+}
+```
+
+### Error Handling
+- Use `thiserror::Error` for custom error types
+- Use `anyhow` for application-level errors if needed
+- Define a crate-level `Result<T>` type alias
+- Provide descriptive error messages
+
+Example:
+```rust
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum MystiProxyError {
+    #[error("配置错误: {0}")]
+    Config(String),
+    
+    #[error("HTTP 错误: {0}")]
+    Http(#[from] http::Error),
+}
+
+pub type Result<T> = std::result::Result<T, MystiProxyError>;
+```
+
+### Async Code Patterns
+- Use `tokio` as the async runtime
+- Use `Arc<Mutex<T>>` for shared mutable state
+- Prefer `tokio::sync::Mutex` over `std::sync::Mutex` in async contexts
+- Use `tokio::spawn` for concurrent tasks
+- Apply timeouts using `tokio::time::timeout`
+
+Example:
+```rust
+pub async fn send_request(&self, request: Request) -> Result<Response> {
+    let response = if let Some(timeout) = self.timeout {
+        tokio::time::timeout(timeout, sender.send_request(request))
+            .await
+            .map_err(|_| MystiProxyError::Timeout)?
+    } else {
+        sender.send_request(request).await?
+    };
+    Ok(response)
+}
+```
+
+### Testing Guidelines
+- Place tests in the same file using `#[cfg(test)] mod tests { ... }`
+- Use descriptive test names starting with `test_`
+- Use `use super::*;` to import parent module items
+- Test both success and error cases
+
+Example:
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn test_parse_duration() {
+        assert_eq!(parse_duration("10s").unwrap(), Duration::from_secs(10));
+        assert!(parse_duration("invalid").is_err());
+    }
+}
+```
+
+### Logging
+- Use the `tracing` crate for logging
+- Use appropriate log levels: `error!`, `warn!`, `info!`, `debug!`, `trace!`
+- Include relevant context in log messages
+
+Example:
+```rust
+use tracing::{debug, info, error};
+
+info!("Starting proxy server on {}", addr);
+debug!("Request headers: {:?}", request.headers());
+error!("Failed to connect: {}", e);
+```
+
+### Serde Configuration
+- Use `#[serde(rename_all = "...")]` for consistent naming
+- Use `#[serde(default)]` for optional fields
+- Use `#[serde(rename = "...")]` for custom field names
+
+Example:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyType {
+    Tcp,
+    Http,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineConfig {
+    #[serde(default)]
+    pub timeout: Option<Duration>,
+    #[serde(rename = "type")]
+    pub config_type: String,
+}
+```
+
+### Documentation Comments
+- Use `///` for documenting public items
+- Use `//!` for module-level documentation
+- Include examples in documentation when helpful
+
+Example:
+```rust
+/// HTTP 客户端连接
+/// 
+/// 提供到目标服务器的连接管理和请求转发功能
+pub struct HttpClient {
+    /// 目标地址
+    target: String,
+}
+```
+
+### Project Structure
+- `src/config/` - Configuration parsing and validation
+- `src/http/` - HTTP server, client, handler, and utilities
+- `src/proxy/` - TCP/Unix socket proxy implementation
+- `src/io/` - Stream and listener abstractions
+- `src/mock/` - Mock response generation
+- `src/error.rs` - Error types and Result alias
+- `src/main.rs` - Application entry point
+- `src/lib.rs` - Library root with re-exports
+
+## Key Dependencies
+- `tokio` - Async runtime
+- `hyper` - HTTP library
+- `serde` / `serde_yaml` / `serde_json` - Serialization
+- `tracing` / `tracing-subscriber` - Logging
+- `thiserror` / `anyhow` - Error handling
+- `clap` - CLI argument parsing
+
+## Configuration Files
+- Use YAML format for configuration
+- Configuration files should be validated on startup
+- Support both file-based and command-line configuration
+
+## Commit Guidelines
+- Write clear, concise commit messages
+- Reference issues when applicable
+- Run tests before committing: `cargo test`
+- Run clippy before committing: `cargo clippy`
+- Format code before committing: `cargo fmt`

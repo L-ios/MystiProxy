@@ -44,14 +44,9 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
     // 创建父目录
     if let Some(parent) = path.parent() {
         if !parent.exists() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| {
-                    MystiProxyError::Proxy(format!(
-                        "无法创建 socket 父目录 {:?}: {}",
-                        parent, e
-                    ))
-                })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                MystiProxyError::Proxy(format!("无法创建 socket 父目录 {:?}: {}", parent, e))
+            })?;
         }
     }
 
@@ -84,9 +79,9 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
 /// }
 /// ```
 pub async fn connect_unix(path: &Path) -> Result<UnixStream> {
-    UnixStream::connect(path)
-        .await
-        .map_err(|e| MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {:?}: {}", path, e)))
+    UnixStream::connect(path).await.map_err(|e| {
+        MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {:?}: {}", path, e))
+    })
 }
 
 /// UDS 到 TCP 的双向数据转发
@@ -119,16 +114,11 @@ pub async fn connect_unix(path: &Path) -> Result<UnixStream> {
 ///     }
 /// }
 /// ```
-pub async fn forward_uds_to_tcp(
-    mut uds_stream: UnixStream,
-    tcp_addr: &str,
-) -> Result<(u64, u64)> {
+pub async fn forward_uds_to_tcp(mut uds_stream: UnixStream, tcp_addr: &str) -> Result<(u64, u64)> {
     // 连接到 TCP 目标
     let mut tcp_stream = TcpStream::connect(tcp_addr)
         .await
-        .map_err(|e| {
-            MystiProxyError::Proxy(format!("无法连接到 TCP 目标 {}: {}", tcp_addr, e))
-        })?;
+        .map_err(|e| MystiProxyError::Proxy(format!("无法连接到 TCP 目标 {}: {}", tcp_addr, e)))?;
 
     // 双向转发
     let (mut uds_read, mut uds_write) = uds_stream.split();
@@ -254,10 +244,7 @@ impl UnixProxy {
         let listener = bind_unix(&self.listen_path).await?;
 
         loop {
-            let (stream, _addr) = listener
-                .accept()
-                .await
-                .map_err(MystiProxyError::Io)?;
+            let (stream, _addr) = listener.accept().await.map_err(MystiProxyError::Io)?;
 
             let target = self.target.clone();
 
@@ -351,7 +338,7 @@ mod tests {
         // 克隆路径用于代理任务
         let server_path_clone = server_path.clone();
         let server_path_for_cleanup = server_path.clone();
-        
+
         // 代理任务
         let proxy_task = tokio::spawn(async move {
             let (stream, _) = proxy_listener.accept().await.expect("接受连接失败");

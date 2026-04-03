@@ -131,14 +131,14 @@
 //! }
 //! ```
 
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::{ClientConfig, RootCertStore, ServerConfig};
+use rustls_pemfile::{certs, private_key};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls::{ClientConfig, RootCertStore, ServerConfig};
-use rustls_pemfile::{certs, private_key};
 
 #[cfg(feature = "legacy-tls")]
 mod openssl_tls;
@@ -253,9 +253,7 @@ impl TlsConfig {
     pub fn from_pem_content(cert_pem: &str, key_pem: &str) -> crate::Result<Self> {
         let cert_chain = certs(&mut cert_pem.as_bytes())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| {
-                crate::MystiProxyError::Tls(format!("证书解析失败: {}", e))
-            })?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("证书解析失败: {}", e)))?;
 
         if cert_chain.is_empty() {
             return Err(crate::MystiProxyError::Tls("未找到证书".to_string()));
@@ -285,9 +283,7 @@ impl TlsConfig {
         let ca_content = std::fs::read(ca_path)?;
         let client_ca = certs(&mut ca_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| {
-                crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e))
-            })?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e)))?;
 
         if client_ca.is_empty() {
             return Err(crate::MystiProxyError::Tls(
@@ -309,9 +305,7 @@ impl TlsConfig {
     pub fn with_client_ca_content(mut self, ca_pem: &str) -> crate::Result<Self> {
         let client_ca = certs(&mut ca_pem.as_bytes())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| {
-                crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e))
-            })?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e)))?;
 
         if client_ca.is_empty() {
             return Err(crate::MystiProxyError::Tls(
@@ -380,17 +374,13 @@ impl TlsConfig {
         for cert in client_ca {
             root_cert_store
                 .add(cert.clone())
-                .map_err(|e| {
-                    crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e))
-                })?;
+                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e)))?;
         }
 
         // 配置客户端证书验证
         let verifier = rustls::server::WebPkiClientVerifier::builder(root_cert_store.into())
             .build()
-            .map_err(|e| {
-                crate::MystiProxyError::Tls(format!("创建客户端验证器失败: {}", e))
-            })?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("创建客户端验证器失败: {}", e)))?;
 
         let mut config = ServerConfig::builder()
             .with_client_cert_verifier(verifier)
@@ -575,15 +565,13 @@ pub fn create_tls_connector(ca_cert: Option<&Path>) -> crate::Result<TlsConnecto
         let ca_content = std::fs::read(ca_path)?;
         let ca_certs = certs(&mut ca_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| {
-                crate::MystiProxyError::Tls(format!("CA 证书解析失败: {}", e))
-            })?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {}", e)))?;
 
         let mut root_cert_store = RootCertStore::empty();
         for cert in ca_certs {
-            root_cert_store.add(cert).map_err(|e| {
-                crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e))
-            })?;
+            root_cert_store
+                .add(cert)
+                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e)))?;
         }
 
         ClientConfig::builder()
@@ -713,7 +701,7 @@ MIIBkTCB+wIJAKHBfpLxAAAAADANBgkqhkiG9w0BAQsFADANMQswCQYDVQQDDAJj
             max_version: TlsVersion::V1_3,
             alpn_protocols: vec![],
         };
-        
+
         let result = config.to_server_config_mutual();
         assert!(result.is_err());
         if let Err(e) = result {
@@ -732,7 +720,7 @@ MIIBkTCB+wIJAKHBfpLxAAAAADANBgkqhkiG9w0BAQsFADANMQswCQYDVQQDDAJj
             max_version: TlsVersion::V1_3,
             alpn_protocols: vec![],
         };
-        
+
         // 使用无效的 CA 内容
         let result = config.with_client_ca_content("invalid ca");
         assert!(result.is_err());
