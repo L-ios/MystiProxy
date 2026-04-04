@@ -4,26 +4,80 @@ use clap::Parser;
 use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
 use mystiproxy::http::{create_handler, HttpServer, HttpServerConfig};
 use mystiproxy::proxy::ProxyServer;
-use mystiproxy::Result;
+use mystiproxy::{set_engine_name, thread_identity, Result};
 use std::collections::HashMap;
 use tokio::signal;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    EnvFilter,
+    fmt::{
+        format::Writer,
+        FmtContext,
+        FormatEvent,
+        FormatFields,
+    },
+    registry::Registry,
+};
 
 mod arg;
 
 use arg::MystiArg;
 
+/// 自定义日志格式化器
+struct CustomFormatter;
+
+impl<N> FormatEvent<Registry, N> for CustomFormatter
+where
+    N: for<'writer> FormatFields<'writer> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, Registry, N>,
+        mut writer: Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        // 获取元数据
+        let meta = event.metadata();
+
+        // 获取级别
+        let level = meta.level();
+
+        // 获取时间
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+
+        // 获取线程标识
+        let thread_id = thread_identity();
+
+        // 写入格式化的日志
+        write!(
+            writer,
+            "{} {} [{}] {}: ",
+            timestamp,
+            level,
+            thread_id,
+            meta.target().split("::").next().unwrap_or("unknown")
+        )?;
+
+        // 格式化字段
+        ctx.format_fields(writer.by_ref(), event)?;
+
+        writeln!(writer)
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = MystiArg::parse();
 
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
+    // 初始化日志 - 使用 fmt::SubscriberBuilder 来正确配置自定义格式
+    let filter = EnvFilter::new(
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+    );
+    
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .event_format(CustomFormatter)
         .init();
 
     tracing::info!("MystiProxy 启动中...");
@@ -57,7 +111,11 @@ async fn main() -> Result<()> {
                         server.target_addr(),
                     );
 
-                    tasks.spawn(async move { server.run().await });
+                    let engine_name = name_clone.clone();
+                    tasks.spawn(async move {
+                        set_engine_name(&engine_name);
+                        server.run().await
+                    });
                 }
                 Err(e) => {
                     error!("创建代理引擎 '{}' 失败: {}", name_clone, e);
@@ -92,7 +150,11 @@ async fn main() -> Result<()> {
                     engine_config.target,
                 );
 
-                tasks.spawn(async move { server.run().await });
+                let engine_name = name_clone.clone();
+                tasks.spawn(async move {
+                    set_engine_name(&engine_name);
+                    server.run().await
+                });
             }
         }
     }

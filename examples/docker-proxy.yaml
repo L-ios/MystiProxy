@@ -1,0 +1,9 @@
+# Docker Socket 代理配置
+# 将 Docker API 代理到 TCP 端口
+mysti:
+  engine:
+    docker:
+      listen: tcp://0.0.0.0:3128
+      target: unix:///var/run/docker.sock
+      proxy_type: http
+      timeout: 10s

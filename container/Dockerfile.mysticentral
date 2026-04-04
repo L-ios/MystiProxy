@@ -1,0 +1,27 @@
+# MystiCentral Dockerfile
+FROM rust:1.75-alpine AS builder
+
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY mysticentral ./mysticentral
+COPY http_proxy ./http_proxy
+
+# Build
+RUN cargo build --release -p mysticentral
+
+# Runtime image
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/mysticentral /usr/local/bin/
+
+EXPOSE 8080
+
+ENTRYPOINT ["mysticentral"]

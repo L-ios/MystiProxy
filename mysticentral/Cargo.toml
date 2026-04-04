@@ -1,0 +1,84 @@
+[package]
+name = "mysticentral"
+version = "0.1.0"
+edition = "2021"
+description = "Central management system for MystiProxy mock configurations"
+license = "MIT"
+
+[dependencies]
+# Internal crates
+mysti-common = { path = "../mysti-common" }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["macros", "ws"] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+hyper = "1"
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+http-body-util = "0.1"
+
+# Database
+sqlx = { version = "0.7", features = ["runtime-tokio", "postgres", "uuid", "chrono", "json"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# UUID support
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuration
+config = "0.14"
+
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env"] }
+
+# Async trait support
+async-trait = "0.1"
+
+# SHA-256 for content hashing
+sha2 = "0.10"
+hex = "0.4"
+
+# Base64 encoding
+base64 = "0.22"
+
+# Password hashing
+argon2 = "0.5"
+rand = "0.8"
+
+# JWT authentication
+jsonwebtoken = "9"
+
+# Futures for WebSocket
+futures = "0.3"
+
+# TLS support
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+webpki-roots = "0.26"
+
+# OpenSSL for legacy TLS 1.0/1.1 support
+openssl = { version = "0.10", features = ["vendored"] }
+tokio-openssl = "0.6"
+
+# Async utilities
+notify = "6.0"
+
+[dev-dependencies]
+tempfile = "3"

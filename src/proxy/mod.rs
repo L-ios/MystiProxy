@@ -83,8 +83,8 @@ impl ProxyServer {
     /// 启动代理服务器
     pub async fn start(&mut self) -> Result<()> {
         info!(
-            "Starting proxy server: {} -> {} ({:?})",
-            self.config.listen, self.config.target, self.config.proxy_type
+            "Starting proxy server: {} -> {}",
+            self.config.listen, self.config.target,
         );
 
         let listener = StreamListener::new(self.config.listen.to_string()).await?;

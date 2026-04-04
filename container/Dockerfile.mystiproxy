@@ -1,0 +1,26 @@
+# MystiProxy Dockerfile (for frontend static serving)
+FROM rust:1.75-alpine AS builder
+
+RUN apk add --no-cache musl-dev
+
+WORKDIR /app
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY http_proxy ./http_proxy
+
+# Build with local-management feature
+RUN cargo build --release -p http_proxy --features local-management
+
+# Runtime image
+FROM alpine:3.19
+
+RUN apk add --no-cache ca-certificates tzdata
+
+WORKDIR /app
+
+COPY --from=builder /app/target/release/http_proxy /usr/local/bin/mystiproxy
+
+EXPOSE 80
+
+ENTRYPOINT ["mystiproxy"]

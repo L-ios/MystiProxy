@@ -1,54 +1,133 @@
-[package]
-name = "mystiproxy"
+[workspace]
+resolver = "2"
+members = [
+    "mysti-common",
+    "mysticentral",
+]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
-description = "A flexible HTTP proxy with mock support"
 license = "MIT"
 
-[dependencies]
-# 异步运行时
+[workspace.dependencies]
+# Async runtime
 tokio = { version = "1", features = ["full"] }
 
-# HTTP 库
-hyper = { version = "1", features = ["full"] }
-hyper-util = { version = "0.1", features = ["full"] }
-http-body-util = "0.1"
-http = "1"
-bytes = "1"
-
-# 配置解析
+# Serialization
 serde = { version = "1", features = ["derive"] }
-serde_yaml = "0.9"
 serde_json = "1"
 
-# 日志
+# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# 错误处理
+# Error handling
 thiserror = "1"
 anyhow = "1"
 
-# 正则匹配
-regex = "1"
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
 
-# JSONPath 支持
-jsonpath-rust = "0.5"
+# Date/time
+chrono = { version = "0.4", features = ["serde"] }
 
-# TLS 支持
+[package]
+name = "mystiproxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Workspace dependencies
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+
+# HTTP
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+bytes = "1"
+
+# TLS
 tokio-rustls = "0.26"
-rustls = "0.23"
+rustls = { version = "0.23", features = ["aws_lc_rs"] }
 rustls-pemfile = "2"
 webpki-roots = "0.26"
 
-# URL 解析
-url = "2"
+# OpenSSL for legacy TLS 1.0/1.1 support
+openssl = { version = "0.10", optional = true }
+tokio-openssl = { version = "0.6", optional = true }
 
-# JWT 认证
+# Async utilities
+futures = "0.3"
+notify = { version = "6.0", optional = true }
+
+# Authentication
 jsonwebtoken = "9"
 
-# 命令行参数解析
-clap = { version = "4", features = ["derive"] }
+# URL parsing
+url = "2"
+
+# Regex
+regex = "1"
+
+# Base64 encoding (for proxy auth)
+base64 = "0.22"
+
+# SHA256 (for password hashing)
+sha2 = "0.10"
+
+# MD4, MD5 for NTLM authentication
+md4 = "0.10"
+md-5 = "0.10"
+hmac = "0.12"
+
+# DES for NTLM authentication
+des = "0.8"
+
+# Random number generation
+rand = "0.8"
+
+# Local management dependencies (feature-gated)
+sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite", "uuid", "chrono", "json"], optional = true }
+async-trait = { version = "0.1", optional = true }
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", features = ["util"], optional = true }
+reqwest = { version = "0.11", features = ["json"], optional = true }
+mysti-common = { path = "mysti-common", optional = true }
+hex = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+rcgen = "0.13"
+test-case = "3"
+
+[features]
+default = []
+# Enable OpenSSL support for legacy TLS 1.0/1.1
+legacy-tls = ["openssl", "tokio-openssl", "notify"]
+# Enable certificate hot reload
+hot-reload = ["notify"]
+# Enable local management with SQLite
+local-management = [
+    "dep:sqlx",
+    "dep:async-trait",
+    "dep:axum",
+    "dep:tower",
+    "dep:reqwest",
+    "dep:mysti-common",
+    "dep:hex",
+]

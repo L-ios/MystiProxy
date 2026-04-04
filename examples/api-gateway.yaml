@@ -1,0 +1,20 @@
+# API 网关配置
+# 转发请求到后端服务
+mysti:
+  engine:
+    api-gateway:
+      listen: tcp://0.0.0.0:8080
+      target: tcp://backend.example.com:80
+      proxy_type: http
+      timeout: 30s
+      header:
+        X-Proxy-By:
+          value: "MystiProxy"
+          action: missed
+      locations:
+        - location: /api/users
+          mode: Prefix
+          provider: proxy
+          request:
+            uri:
+              path: /users

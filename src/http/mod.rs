@@ -6,8 +6,11 @@ mod auth;
 mod body;
 mod client;
 mod handler;
+mod ntlm;
+mod proxy;
 mod server;
 mod static_files;
+mod upstream;
 
 use http_body_util::BodyExt;
 use hyper::body::{Bytes, Incoming};
@@ -17,10 +20,17 @@ pub use auth::{AuthConfig, AuthResult, AuthType, Authenticator, Claims};
 pub use body::{read_json_body, write_json_body, BodyTransformer};
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
+pub use ntlm::{NtlmAuthenticator, NtlmConfig, NtlmVersion, Type2Message};
+pub use proxy::{
+    HttpProxyAcceptor, HttpProxyConfig, HttpProxyService, ProxyAuthConfig,
+};
 pub use server::{
-    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService, HttpServer, HttpServerConfig,
+    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService as SimpleHttpProxyService, HttpServer, HttpServerConfig,
 };
 pub use static_files::{StaticFileConfig, StaticFileService};
+pub use upstream::{
+    ProxyConverter, UpstreamAuth, UpstreamProtocol, UpstreamProxyConfig, UpstreamProxyConnector,
+};
 
 /// HTTP 请求处理工具
 pub struct HttpHandler;
