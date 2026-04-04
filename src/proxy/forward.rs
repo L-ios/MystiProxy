@@ -211,7 +211,8 @@ mod tests {
         let target = TcpStream::connect(addr).await.unwrap();
 
         client.write_all(b"hello").await.unwrap();
-        
+
+        // 关闭写入端
         client.shutdown().await.unwrap();
 
         let result = tokio::time::timeout(

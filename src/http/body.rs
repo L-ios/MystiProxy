@@ -104,10 +104,10 @@ impl BodyTransformer {
             return Ok(());
         }
 
-        let path = path.strip_prefix("$.").ok_or_else(|| {
-            MystiProxyError::JsonPath("Path must start with $.".to_string())
-        })?;
-        
+        let path = path
+            .strip_prefix("$.")
+            .ok_or_else(|| MystiProxyError::JsonPath("Path must start with $.".to_string()))?;
+
         let parts: Vec<&str> = path.split('.').collect();
         Self::set_nested_value(body, &parts, new_value)
     }
@@ -121,7 +121,7 @@ impl BodyTransformer {
         if parts.len() == 1 {
             // 最后一层，直接设置值
             let part = parts[0];
-            
+
             // 处理数组索引
             if part.contains('[') {
                 Self::set_array_value(body, part, new_value)?;
@@ -129,17 +129,17 @@ impl BodyTransformer {
                 obj.insert(part.to_string(), new_value);
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot set field on non-object value".to_string()
+                    "Cannot set field on non-object value".to_string(),
                 ));
             }
-            
+
             return Ok(());
         }
 
         // 多层路径，递归处理
         let part = parts[0];
         let remaining = &parts[1..];
-        
+
         // 处理数组索引
         if part.contains('[') {
             let current = body;
@@ -154,10 +154,10 @@ impl BodyTransformer {
             }
         } else {
             return Err(MystiProxyError::JsonPath(
-                "Cannot navigate through non-object value".to_string()
+                "Cannot navigate through non-object value".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 
@@ -165,9 +165,9 @@ impl BodyTransformer {
     fn set_array_value(body: &mut Value, part: &str, new_value: Value) -> Result<()> {
         let idx_parts: Vec<&str> = part.split('[').collect();
         let field = idx_parts[0];
-        
+
         let mut current = body;
-        
+
         // 如果有字段名，先导航到字段
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
@@ -179,34 +179,35 @@ impl BodyTransformer {
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot access field on non-object value".to_string()
+                    "Cannot access field on non-object value".to_string(),
                 ));
             }
         }
-        
+
         // 处理数组索引
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
                     MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
                 })?;
-                
+
                 if let Some(arr) = current.as_array_mut() {
                     if idx < arr.len() {
                         current = &mut arr[idx];
                     } else {
-                        return Err(MystiProxyError::JsonPath(
-                            format!("Array index {} out of bounds", idx)
-                        ));
+                        return Err(MystiProxyError::JsonPath(format!(
+                            "Array index {} out of bounds",
+                            idx
+                        )));
                     }
                 } else {
                     return Err(MystiProxyError::JsonPath(
-                        "Cannot index non-array value".to_string()
+                        "Cannot index non-array value".to_string(),
                     ));
                 }
             }
         }
-        
+
         *current = new_value;
         Ok(())
     }
@@ -220,9 +221,9 @@ impl BodyTransformer {
     ) -> Result<()> {
         let idx_parts: Vec<&str> = part.split('[').collect();
         let field = idx_parts[0];
-        
+
         let mut current = body;
-        
+
         // 如果有字段名，先导航到字段
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
@@ -234,34 +235,35 @@ impl BodyTransformer {
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot access field on non-object value".to_string()
+                    "Cannot access field on non-object value".to_string(),
                 ));
             }
         }
-        
+
         // 处理数组索引
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
                     MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
                 })?;
-                
+
                 if let Some(arr) = current.as_array_mut() {
                     if idx < arr.len() {
                         current = &mut arr[idx];
                     } else {
-                        return Err(MystiProxyError::JsonPath(
-                            format!("Array index {} out of bounds", idx)
-                        ));
+                        return Err(MystiProxyError::JsonPath(format!(
+                            "Array index {} out of bounds",
+                            idx
+                        )));
                     }
                 } else {
                     return Err(MystiProxyError::JsonPath(
-                        "Cannot index non-array value".to_string()
+                        "Cannot index non-array value".to_string(),
                     ));
                 }
             }
         }
-        
+
         // 递归处理剩余路径
         Self::set_nested_value(current, remaining, new_value)?;
         Ok(())
@@ -275,12 +277,12 @@ impl BodyTransformer {
             return Ok(());
         }
 
-        let path = path.strip_prefix("$.").ok_or_else(|| {
-            MystiProxyError::JsonPath("Path must start with $.".to_string())
-        })?;
-        
+        let path = path
+            .strip_prefix("$.")
+            .ok_or_else(|| MystiProxyError::JsonPath("Path must start with $.".to_string()))?;
+
         let parts: Vec<&str> = path.split('.').collect();
-        
+
         if parts.is_empty() {
             return Ok(());
         }
@@ -288,7 +290,7 @@ impl BodyTransformer {
         // 找到父节点并删除
         if parts.len() == 1 {
             let part = parts[0];
-            
+
             // 处理数组索引
             if part.contains('[') {
                 Self::delete_array_element(body, part)?;
@@ -301,7 +303,7 @@ impl BodyTransformer {
         // 多层路径，先找到父节点
         let parent_parts = &parts[..parts.len() - 1];
         let last_part = parts[parts.len() - 1];
-        
+
         let mut current = body;
         for part in parent_parts {
             if part.contains('[') {
@@ -312,18 +314,18 @@ impl BodyTransformer {
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot navigate through non-object value".to_string()
+                    "Cannot navigate through non-object value".to_string(),
                 ));
             }
         }
-        
+
         // 删除最后一个字段或数组元素
         if last_part.contains('[') {
             Self::delete_array_element(current, last_part)?;
         } else if let Some(obj) = current.as_object_mut() {
             obj.remove(last_part);
         }
-        
+
         Ok(())
     }
 
@@ -331,9 +333,9 @@ impl BodyTransformer {
     fn navigate_array<'a>(body: &'a mut Value, part: &str) -> Result<&'a mut Value> {
         let idx_parts: Vec<&str> = part.split('[').collect();
         let field = idx_parts[0];
-        
+
         let mut current = body;
-        
+
         // 如果有字段名，先导航到字段
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
@@ -342,34 +344,35 @@ impl BodyTransformer {
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot access field on non-object value".to_string()
+                    "Cannot access field on non-object value".to_string(),
                 ));
             }
         }
-        
+
         // 处理数组索引
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
                     MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
                 })?;
-                
+
                 if let Some(arr) = current.as_array_mut() {
                     if idx < arr.len() {
                         current = &mut arr[idx];
                     } else {
-                        return Err(MystiProxyError::JsonPath(
-                            format!("Array index {} out of bounds", idx)
-                        ));
+                        return Err(MystiProxyError::JsonPath(format!(
+                            "Array index {} out of bounds",
+                            idx
+                        )));
                     }
                 } else {
                     return Err(MystiProxyError::JsonPath(
-                        "Cannot index non-array value".to_string()
+                        "Cannot index non-array value".to_string(),
                     ));
                 }
             }
         }
-        
+
         Ok(current)
     }
 
@@ -377,9 +380,9 @@ impl BodyTransformer {
     fn delete_array_element(body: &mut Value, part: &str) -> Result<()> {
         let idx_parts: Vec<&str> = part.split('[').collect();
         let field = idx_parts[0];
-        
+
         let mut current = body;
-        
+
         // 如果有字段名，先导航到字段
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
@@ -388,30 +391,30 @@ impl BodyTransformer {
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
-                    "Cannot access field on non-object value".to_string()
+                    "Cannot access field on non-object value".to_string(),
                 ));
             }
         }
-        
+
         // 处理数组索引
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
                     MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
                 })?;
-                
+
                 if let Some(arr) = current.as_array_mut() {
                     if idx < arr.len() {
                         arr.remove(idx);
                     }
                 } else {
                     return Err(MystiProxyError::JsonPath(
-                        "Cannot index non-array value".to_string()
+                        "Cannot index non-array value".to_string(),
                     ));
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -448,10 +451,8 @@ pub async fn read_json_body(body: Incoming) -> Result<Value> {
 pub fn write_json_body(value: &Value) -> super::BoxBody {
     let json_str = serde_json::to_string(value).unwrap_or_else(|_| "{}".to_string());
     let bytes = Bytes::from(json_str);
-    
-    Full::new(bytes)
-        .map_err(|never| match never {})
-        .boxed()
+
+    Full::new(bytes).map_err(|never| match never {}).boxed()
 }
 
 #[cfg(test)]
@@ -565,10 +566,10 @@ mod tests {
     #[test]
     fn test_set_nested_value() {
         let mut body = json!({});
-        
+
         BodyTransformer::set_nested_value(&mut body, &["user", "name"], json!("test")).unwrap();
         assert_eq!(body["user"]["name"], "test");
-        
+
         BodyTransformer::set_nested_value(&mut body, &["user", "age"], json!(25)).unwrap();
         assert_eq!(body["user"]["age"], 25);
     }
@@ -610,7 +611,7 @@ mod tests {
     #[test]
     fn test_create_nested_path() {
         let mut body = json!({});
-        
+
         // 创建不存在的嵌套路径
         let config = BodyConfig {
             json: Some(JsonBodyConfig {

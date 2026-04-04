@@ -181,7 +181,9 @@ impl StaticFileService {
 
         // 处理范围请求
         if let Some(range) = range_header {
-            return self.serve_range(&canonical_path, range, file_size, mime_type).await;
+            return self
+                .serve_range(&canonical_path, range, file_size, mime_type)
+                .await;
         }
 
         // 读取整个文件
@@ -213,7 +215,8 @@ impl StaticFileService {
         range_header: &'a str,
         file_size: u64,
         mime_type: &'a str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response<BoxBody>>> + 'a>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response<BoxBody>>> + Send + 'a>>
+    {
         Box::pin(async move {
             // 解析 Range 头部
             let ranges = parse_range_header(range_header, file_size)?;
@@ -222,7 +225,10 @@ impl StaticFileService {
                 // 无效的范围请求，返回整个文件
                 let content = tokio::fs::read(path).await?;
 
-                debug!("Serving full file due to invalid range: {} bytes", content.len());
+                debug!(
+                    "Serving full file due to invalid range: {} bytes",
+                    content.len()
+                );
 
                 let response = Response::builder()
                     .status(StatusCode::OK)
@@ -242,10 +248,7 @@ impl StaticFileService {
             // 读取指定范围的数据
             let content = read_file_range(path, start, end).await?;
 
-            debug!(
-                "Serving range: {}-{} / {} bytes",
-                start, end, file_size
-            );
+            debug!("Serving range: {}-{} / {} bytes", start, end, file_size);
 
             // 构建响应
             let response = Response::builder()
@@ -381,20 +384,22 @@ impl StaticFileService {
             Some("webm") => "video/webm",
             Some("avi") => "video/x-msvideo",
             Some("doc") => "application/msword",
-            Some("docx") => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            Some("docx") => {
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
             Some("xls") => "application/vnd.ms-excel",
             Some("xlsx") => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             Some("ppt") => "application/vnd.ms-powerpoint",
-            Some("pptx") => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            Some("pptx") => {
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            }
             _ => "application/octet-stream",
         }
     }
 
     /// 创建完整响应体
     fn full_body(bytes: Bytes) -> BoxBody {
-        Full::new(bytes)
-            .map_err(|never| match never {})
-            .boxed()
+        Full::new(bytes).map_err(|never| match never {}).boxed()
     }
 }
 
@@ -593,7 +598,10 @@ mod tests {
             service.get_mime_type(Path::new("index.html")),
             "text/html; charset=utf-8"
         );
-        assert_eq!(service.get_mime_type(Path::new("style.css")), "text/css; charset=utf-8");
+        assert_eq!(
+            service.get_mime_type(Path::new("style.css")),
+            "text/css; charset=utf-8"
+        );
         assert_eq!(
             service.get_mime_type(Path::new("app.js")),
             "application/javascript"
