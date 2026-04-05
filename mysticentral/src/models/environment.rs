@@ -107,12 +107,17 @@ mod tests {
     fn test_environment_from_template() {
         let mut template = Environment::new("template".to_string());
         template.is_template = true;
-        template.endpoints.insert("api".to_string(), "https://api.example.com".to_string());
+        template
+            .endpoints
+            .insert("api".to_string(), "https://api.example.com".to_string());
 
         let env = Environment::from_template("dev".to_string(), &template);
         assert_eq!(env.name, "dev");
         assert!(!env.is_template);
         assert_eq!(env.template_id, Some(template.id));
-        assert_eq!(env.endpoints.get("api"), Some(&"https://api.example.com".to_string()));
+        assert_eq!(
+            env.endpoints.get("api"),
+            Some(&"https://api.example.com".to_string())
+        );
     }
 }

@@ -24,6 +24,5 @@ pub use mock_service::MockService;
 pub use postgres_repository::PostgresMockRepository;
 pub use repository::MockRepository;
 pub use sync_protocol::{
-    SyncConflict, ConflictReason, ConflictResolution,
-    SyncPullResponse, SyncPushResponse,
+    ConflictReason, ConflictResolution, SyncConflict, SyncPullResponse, SyncPushResponse,
 };

@@ -5,17 +5,22 @@
 // Re-export all shared models from mysti-common
 pub use mysti_common::{
     // Core types
-    HttpMethod, MockSource, VersionVector,
+    HttpMethod,
     // Matching rules
     MatchingRules,
+    // Mock configuration
+    MockConfiguration,
+    MockCreateRequest,
+    MockFilter,
+    MockSource,
+    MockUpdateRequest,
     // Response configuration
     ResponseConfig,
     // State machine
     StateConfig,
-    // Mock configuration
-    MockConfiguration, MockFilter, MockCreateRequest, MockUpdateRequest,
     // Sync types
     SyncStatus,
+    VersionVector,
 };
 
 // Central-specific models
@@ -24,8 +29,6 @@ pub mod instance;
 pub mod user;
 
 pub use environment::{
-    Environment, EnvironmentCreateRequest, EnvironmentUpdateRequest, EnvironmentFilter,
+    Environment, EnvironmentCreateRequest, EnvironmentFilter, EnvironmentUpdateRequest,
 };
-pub use instance::{
-    MystiProxyInstance, InstanceRegisterRequest, HeartbeatRequest, InstanceFilter,
-};
+pub use instance::{HeartbeatRequest, InstanceFilter, InstanceRegisterRequest, MystiProxyInstance};

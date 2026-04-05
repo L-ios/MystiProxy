@@ -136,7 +136,10 @@ fn set_tls_version_constraints(
 }
 
 /// Configure mutual TLS (mTLS) with client certificate verification
-fn configure_mtls(builder: &mut openssl::ssl::SslAcceptorBuilder, client_ca_path: &str) -> Result<()> {
+fn configure_mtls(
+    builder: &mut openssl::ssl::SslAcceptorBuilder,
+    client_ca_path: &str,
+) -> Result<()> {
     // Load CA certificate(s) for client verification
     let ca_file = std::fs::File::open(client_ca_path)
         .with_context(|| format!("Failed to open client CA file: {}", client_ca_path))?;
@@ -148,12 +151,15 @@ fn configure_mtls(builder: &mut openssl::ssl::SslAcceptorBuilder, client_ca_path
         .context("Failed to parse client CA certificates")?;
 
     if certs.is_empty() {
-        anyhow::bail!("No certificates found in client CA file: {}", client_ca_path);
+        anyhow::bail!(
+            "No certificates found in client CA file: {}",
+            client_ca_path
+        );
     }
 
     // Create a CA store for client certificate verification
     let ca_store = builder.cert_store_mut();
-    
+
     for cert_der in certs {
         let cert = openssl::x509::X509::from_der(&cert_der)
             .context("Failed to parse client CA certificate from DER")?;
@@ -171,7 +177,10 @@ fn configure_mtls(builder: &mut openssl::ssl::SslAcceptorBuilder, client_ca_path
 }
 
 /// Configure ALPN (Application-Layer Protocol Negotiation)
-fn configure_alpn(builder: &mut openssl::ssl::SslAcceptorBuilder, protocols: &[String]) -> Result<()> {
+fn configure_alpn(
+    builder: &mut openssl::ssl::SslAcceptorBuilder,
+    protocols: &[String],
+) -> Result<()> {
     // Build ALPN protocol list in wire format
     let mut alpn_wire = Vec::new();
     for protocol in protocols {
@@ -255,27 +264,41 @@ mod tests {
         let mut builder = openssl::x509::X509Builder::new().unwrap();
         builder.set_version(2).unwrap();
         builder
-            .set_subject_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref())
+            .set_subject_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.set_issuer_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref()).unwrap();
         builder
-            .set_pubkey(&pkey)
+            .set_issuer_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
+        builder.set_pubkey(&pkey).unwrap();
         builder
             .set_not_before(openssl::asn1::Asn1Time::days_from_now(0).unwrap().as_ref())
             .unwrap();
         builder
-            .set_not_after(openssl::asn1::Asn1Time::days_from_now(365).unwrap().as_ref())
+            .set_not_after(
+                openssl::asn1::Asn1Time::days_from_now(365)
+                    .unwrap()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.sign(&pkey, openssl::hash::MessageDigest::sha256()).unwrap();
+        builder
+            .sign(&pkey, openssl::hash::MessageDigest::sha256())
+            .unwrap();
         let cert = builder.build();
 
         let mut cert_file = NamedTempFile::new().unwrap();
         let mut key_file = NamedTempFile::new().unwrap();
 
-        cert_file
-            .write_all(&cert.to_pem().unwrap())
-            .unwrap();
+        cert_file.write_all(&cert.to_pem().unwrap()).unwrap();
         key_file
             .write_all(&pkey.private_key_to_pem_pkcs8().unwrap())
             .unwrap();
@@ -293,12 +316,22 @@ mod tests {
         let mut builder = openssl::x509::X509Builder::new().unwrap();
         builder.set_version(2).unwrap();
         builder
-            .set_subject_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref())
+            .set_subject_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.set_issuer_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref()).unwrap();
         builder
-            .set_pubkey(&pkey)
+            .set_issuer_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
+        builder.set_pubkey(&pkey).unwrap();
         // Set short validity period (expires in 1 day)
         builder
             .set_not_before(openssl::asn1::Asn1Time::days_from_now(0).unwrap().as_ref())
@@ -306,15 +339,15 @@ mod tests {
         builder
             .set_not_after(openssl::asn1::Asn1Time::days_from_now(1).unwrap().as_ref())
             .unwrap();
-        builder.sign(&pkey, openssl::hash::MessageDigest::sha256()).unwrap();
+        builder
+            .sign(&pkey, openssl::hash::MessageDigest::sha256())
+            .unwrap();
         let cert = builder.build();
 
         let mut cert_file = NamedTempFile::new().unwrap();
         let mut key_file = NamedTempFile::new().unwrap();
 
-        cert_file
-            .write_all(&cert.to_pem().unwrap())
-            .unwrap();
+        cert_file.write_all(&cert.to_pem().unwrap()).unwrap();
         key_file
             .write_all(&pkey.private_key_to_pem_pkcs8().unwrap())
             .unwrap();
@@ -329,27 +362,41 @@ mod tests {
 
         let mut builder = openssl::x509::X509Builder::new().unwrap();
         builder.set_version(2).unwrap();
-        
+
         builder
-            .set_subject_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref())
+            .set_subject_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.set_issuer_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref()).unwrap();
         builder
-            .set_pubkey(&pkey)
+            .set_issuer_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
+        builder.set_pubkey(&pkey).unwrap();
         builder
             .set_not_before(openssl::asn1::Asn1Time::days_from_now(0).unwrap().as_ref())
             .unwrap();
         builder
-            .set_not_after(openssl::asn1::Asn1Time::days_from_now(365).unwrap().as_ref())
+            .set_not_after(
+                openssl::asn1::Asn1Time::days_from_now(365)
+                    .unwrap()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.sign(&pkey, openssl::hash::MessageDigest::sha256()).unwrap();
+        builder
+            .sign(&pkey, openssl::hash::MessageDigest::sha256())
+            .unwrap();
         let cert = builder.build();
 
         let mut cert_file = NamedTempFile::new().unwrap();
-        cert_file
-            .write_all(&cert.to_pem().unwrap())
-            .unwrap();
+        cert_file.write_all(&cert.to_pem().unwrap()).unwrap();
 
         cert_file
     }
@@ -388,7 +435,10 @@ mod tests {
 
         let result = build_ssl_context(&config);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid TLS version range"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid TLS version range"));
     }
 
     #[test]
@@ -566,7 +616,11 @@ mod tests {
             min_version: TlsVersion::V1_2,
             max_version: TlsVersion::V1_3,
             enable_alpn: true,
-            alpn_protocols: vec!["h2".to_string(), "http/1.1".to_string(), "http/1.0".to_string()],
+            alpn_protocols: vec![
+                "h2".to_string(),
+                "http/1.1".to_string(),
+                "http/1.0".to_string(),
+            ],
         };
 
         let result = build_ssl_context(&config);
@@ -636,7 +690,7 @@ mod tests {
     fn test_invalid_certificate_content() {
         let mut cert_file = NamedTempFile::new().unwrap();
         let mut key_file = NamedTempFile::new().unwrap();
-        
+
         cert_file.write_all(b"invalid certificate content").unwrap();
         key_file.write_all(b"invalid key content").unwrap();
 
@@ -749,7 +803,7 @@ mod tests {
 
         let server = TlsServer::new(&config, false).unwrap();
         let acceptor = server.acceptor().await;
-        
+
         // Just verify the acceptor can be created
         let _ = acceptor;
     }
@@ -770,10 +824,13 @@ mod tests {
         };
 
         let tls_config: TlsConfig = config_typed.into();
-        
+
         assert_eq!(tls_config.cert_path, "/path/to/cert.pem");
         assert_eq!(tls_config.key_path, "/path/to/key.pem");
-        assert_eq!(tls_config.client_ca_path, Some("/path/to/ca.pem".to_string()));
+        assert_eq!(
+            tls_config.client_ca_path,
+            Some("/path/to/ca.pem".to_string())
+        );
         assert_eq!(tls_config.min_version, TlsVersion::V1_2);
         assert_eq!(tls_config.max_version, TlsVersion::V1_3);
         assert!(tls_config.enable_alpn);

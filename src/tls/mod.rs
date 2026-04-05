@@ -4,6 +4,7 @@
 //! - TLS 1.2/1.3 通过 rustls（默认）
 //! - TLS 1.0/1.1 通过 OpenSSL（需要启用 `legacy-tls` feature）
 //! - ALPN 协议协商
+//!
 //! TLS 模块 - 提供单向和双向 TLS 认证支持
 //!
 //! 本模块提供了完整的 TLS/SSL 功能，支持：
@@ -253,7 +254,7 @@ impl TlsConfig {
     pub fn from_pem_content(cert_pem: &str, key_pem: &str) -> crate::Result<Self> {
         let cert_chain = certs(&mut cert_pem.as_bytes())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("证书解析失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("证书解析失败: {e}")))?;
 
         if cert_chain.is_empty() {
             return Err(crate::MystiProxyError::Tls("未找到证书".to_string()));
@@ -283,7 +284,7 @@ impl TlsConfig {
         let ca_content = std::fs::read(ca_path)?;
         let client_ca = certs(&mut ca_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {e}")))?;
 
         if client_ca.is_empty() {
             return Err(crate::MystiProxyError::Tls(
@@ -305,7 +306,7 @@ impl TlsConfig {
     pub fn with_client_ca_content(mut self, ca_pem: &str) -> crate::Result<Self> {
         let client_ca = certs(&mut ca_pem.as_bytes())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 CA 证书解析失败: {e}")))?;
 
         if client_ca.is_empty() {
             return Err(crate::MystiProxyError::Tls(
@@ -321,7 +322,7 @@ impl TlsConfig {
     pub fn with_version_range(mut self, min: TlsVersion, max: TlsVersion) -> crate::Result<Self> {
         if min as u8 > max as u8 {
             return Err(crate::MystiProxyError::Tls(
-                format!("无效的 TLS 版本范围: min ({:?}) > max ({:?})", min, max)
+                format!("无效的 TLS 版本范围: min ({min:?}) > max ({max:?})")
             ));
         }
         self.min_version = min;
@@ -345,7 +346,7 @@ impl TlsConfig {
         let mut config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(self.cert_chain.clone(), self.key.clone_key())
-            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 配置创建失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 配置创建失败: {e}")))?;
 
         // 配置 ALPN
         if !self.alpn_protocols.is_empty() {
@@ -374,18 +375,18 @@ impl TlsConfig {
         for cert in client_ca {
             root_cert_store
                 .add(cert.clone())
-                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e)))?;
+                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {e}")))?;
         }
 
         // 配置客户端证书验证
         let verifier = rustls::server::WebPkiClientVerifier::builder(root_cert_store.into())
             .build()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("创建客户端验证器失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("创建客户端验证器失败: {e}")))?;
 
         let mut config = ServerConfig::builder()
             .with_client_cert_verifier(verifier)
             .with_single_cert(self.cert_chain.clone(), self.key.clone_key())
-            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 配置创建失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 配置创建失败: {e}")))?;
 
         // 配置 ALPN
         if !self.alpn_protocols.is_empty() {
@@ -415,7 +416,7 @@ impl TlsConfigBuilder {
 
         self.cert_chain = certs(&mut cert_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("证书解析失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("证书解析失败: {e}")))?;
 
         if self.cert_chain.is_empty() {
             return Err(crate::MystiProxyError::Tls("未找到证书".to_string()));
@@ -432,7 +433,7 @@ impl TlsConfigBuilder {
         let ca_content = std::fs::read(ca_path)?;
         self.client_ca = Some(certs(&mut ca_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {}", e)))?);
+            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {e}")))?);
         Ok(self)
     }
 
@@ -440,7 +441,7 @@ impl TlsConfigBuilder {
     pub fn with_version_range(mut self, min: TlsVersion, max: TlsVersion) -> crate::Result<Self> {
         if min as u8 > max as u8 {
             return Err(crate::MystiProxyError::Tls(
-                format!("无效的 TLS 版本范围: min ({:?}) > max ({:?})", min, max)
+                format!("无效的 TLS 版本范围: min ({min:?}) > max ({max:?})")
             ));
         }
         self.min_version = min;
@@ -528,7 +529,7 @@ impl TlsServer {
         self.acceptor
             .accept(stream)
             .await
-            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 握手失败: {}", e)))
+            .map_err(|e| crate::MystiProxyError::Tls(format!("TLS 握手失败: {e}")))
     }
 }
 
@@ -565,13 +566,13 @@ pub fn create_tls_connector(ca_cert: Option<&Path>) -> crate::Result<TlsConnecto
         let ca_content = std::fs::read(ca_path)?;
         let ca_certs = certs(&mut ca_content.as_slice())
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {e}")))?;
 
         let mut root_cert_store = RootCertStore::empty();
         for cert in ca_certs {
             root_cert_store
                 .add(cert)
-                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e)))?;
+                .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {e}")))?;
         }
 
         ClientConfig::builder()
@@ -629,20 +630,20 @@ pub fn create_tls_connector_with_client_cert(
     let ca_content = std::fs::read(ca_cert)?;
     let ca_certs = certs(&mut ca_content.as_slice())
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {}", e)))?;
+        .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {e}")))?;
 
     let mut root_cert_store = RootCertStore::empty();
     for cert in ca_certs {
         root_cert_store
             .add(cert)
-            .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {}", e)))?;
+            .map_err(|e| crate::MystiProxyError::Tls(format!("添加 CA 证书失败: {e}")))?;
     }
 
     // 加载客户端证书和私钥
     let cert_content = std::fs::read(client_cert)?;
     let cert_chain = certs(&mut cert_content.as_slice())
         .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| crate::MystiProxyError::Tls(format!("客户端证书解析失败: {}", e)))?;
+        .map_err(|e| crate::MystiProxyError::Tls(format!("客户端证书解析失败: {e}")))?;
 
     let key_content = std::fs::read(client_key)?;
     let key = private_key(&mut key_content.as_slice())?
@@ -651,7 +652,7 @@ pub fn create_tls_connector_with_client_cert(
     let config = ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_client_auth_cert(cert_chain, key)
-        .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 TLS 配置创建失败: {}", e)))?;
+        .map_err(|e| crate::MystiProxyError::Tls(format!("客户端 TLS 配置创建失败: {e}")))?;
 
     Ok(TlsConnector::from(Arc::new(config)))
 }

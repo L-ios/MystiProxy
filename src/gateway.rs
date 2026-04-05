@@ -133,7 +133,7 @@ impl UriMapping {
                 (None, "\\w+")
             };
             let variable = UriVariable {
-                name: (&cap[1]).to_string(),
+                name: cap[1].to_string(),
                 pattern,
                 regex: Regex::new(regex).unwrap(),
                 index,
@@ -142,7 +142,7 @@ impl UriMapping {
             index += 1;
         }
 
-        return variable_patterns;
+        variable_patterns
     }
 
     /// # uri的匹配模式
@@ -173,10 +173,10 @@ impl UriMapping {
         }
 
         let variable_patterns = Self::uri_variable(self.uri.as_str());
-        if variable_patterns.len() == 0 {
+        if variable_patterns.is_empty() {
             // 前缀匹配
             let prefix_uri = if self.uri.ends_with("/") {
-                format!("{}", self.uri)
+                self.uri.to_string()
             } else {
                 format!("{}/", self.uri)
             };
@@ -197,7 +197,7 @@ impl UriMapping {
         }
 
         // 构造正则表达式并尝试匹配
-        let regex = Regex::new(&format!("^{}\\/?.*$", processed_base_uri)).unwrap();
+        let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).unwrap();
         let mut match_var = HashMap::new();
         if regex.is_match(in_uri) {
             let mut end = 0;
@@ -237,7 +237,7 @@ impl UriMapping {
                 let in_map = Self::uri_variable(self.uri.as_str());
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = self.uri.clone();
-                for (_, regex_pattern) in &in_map {
+                for regex_pattern in in_map.values() {
                     processed_base_uri = processed_base_uri.replace(
                         &regex_pattern.origin(),
                         &format!(r"({})", regex_pattern.to_pattern().as_str()),
@@ -249,7 +249,7 @@ impl UriMapping {
                     .unwrap()
                     .replace(in_uri, "")
                     .to_string();
-                let regex = Regex::new(&format!("^{}\\/?.*$", processed_base_uri)).unwrap();
+                let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).unwrap();
                 let mut match_var = HashMap::new();
 
                 for cap in regex.captures_iter(in_uri) {
@@ -268,7 +268,7 @@ impl UriMapping {
                 // 通过遍历map，转移target
                 let mut target_uri = self.target_uri.clone();
                 let out_map = Self::uri_variable(self.target_uri.as_str());
-                for (_, regex_pattern) in &out_map {
+                for regex_pattern in out_map.values() {
                     let name = regex_pattern.name.as_str();
                     match in_map.get(name) {
                         Some(variable) => {
@@ -280,19 +280,15 @@ impl UriMapping {
                         }
                     }
                 }
-                if rest.len() == 0 {
+                if rest.is_empty() {
                     return Some(target_uri);
                 }
-                let rest = if rest.starts_with("/") {
-                    &rest[1..]
-                } else {
-                    &rest
-                };
+                let rest = rest.strip_prefix('/').unwrap_or(&rest);
 
-                if target_uri.ends_with("/") {
-                    Some(format!("{}{}", target_uri, rest))
+                if target_uri.ends_with('/') {
+                    Some(format!("{target_uri}{rest}"))
                 } else {
-                    Some(format!("{}/{}", target_uri, rest))
+                    Some(format!("{target_uri}/{rest}"))
                 }
             }
         }
@@ -311,7 +307,7 @@ impl UriMapping {
             mtds
         })
     }
-    fn serialize_method<S>(methods: &Vec<String>, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize_method<S>(methods: &[String], serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {

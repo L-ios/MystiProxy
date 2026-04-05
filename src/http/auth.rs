@@ -60,8 +60,8 @@ impl Default for AuthConfig {
     }
 }
 
-/// 鉴权结果
-#[derive(Debug, Clone)]
+/// 认证结果
+#[derive(Debug, Clone, Default)]
 pub struct AuthResult {
     /// 是否认证成功
     pub authenticated: bool,
@@ -69,16 +69,6 @@ pub struct AuthResult {
     pub user: Option<String>,
     /// JWT claims（如果是 JWT 鉴权）
     pub claims: Option<HashMap<String, serde_json::Value>>,
-}
-
-impl Default for AuthResult {
-    fn default() -> Self {
-        Self {
-            authenticated: false,
-            user: None,
-            claims: None,
-        }
-    }
 }
 
 /// JWT Claims 结构
@@ -212,8 +202,8 @@ impl Authenticator {
         let token = match header_value {
             Some(value) => {
                 // 支持 "Bearer <token>" 格式
-                if value.starts_with("Bearer ") {
-                    value[7..].to_string()
+                if let Some(token) = value.strip_prefix("Bearer ") {
+                    token.to_string()
                 } else {
                     value.to_string()
                 }

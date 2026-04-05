@@ -6,9 +6,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
-use crate::models::{
-    MockConfiguration, MockCreateRequest, MockFilter, MockUpdateRequest,
-};
+use crate::models::{MockConfiguration, MockCreateRequest, MockFilter, MockUpdateRequest};
 use crate::services::MockRepository;
 
 /// Service for managing mock configurations
@@ -23,7 +21,11 @@ impl<R: MockRepository> MockService<R> {
     }
 
     /// Create a new mock configuration
-    pub async fn create(&self, request: MockCreateRequest, user_id: Option<Uuid>) -> ApiResult<MockConfiguration> {
+    pub async fn create(
+        &self,
+        request: MockCreateRequest,
+        user_id: Option<Uuid>,
+    ) -> ApiResult<MockConfiguration> {
         // Validate the request
         self.validate_create_request(&request)?;
 
@@ -50,10 +52,9 @@ impl<R: MockRepository> MockService<R> {
 
     /// Get a mock configuration by ID
     pub async fn get(&self, id: Uuid) -> ApiResult<MockConfiguration> {
-        self.repository
-            .find_by_id(id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Mock configuration with id {} not found", id)))
+        self.repository.find_by_id(id).await?.ok_or_else(|| {
+            ApiError::NotFound(format!("Mock configuration with id {} not found", id))
+        })
     }
 
     /// List mock configurations with filtering
@@ -181,7 +182,7 @@ impl<R: MockRepository> MockService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{MatchingRules, ResponseConfig, HttpMethod};
+    use crate::models::{HttpMethod, MatchingRules, ResponseConfig};
     use crate::services::repository::InMemoryMockRepository;
 
     #[tokio::test]
@@ -262,7 +263,10 @@ mod tests {
             is_active: None,
         };
 
-        let updated = service.update(id, update_request, instance_id).await.unwrap();
+        let updated = service
+            .update(id, update_request, instance_id)
+            .await
+            .unwrap();
         assert_eq!(updated.name, "Updated Mock");
     }
 

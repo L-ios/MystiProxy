@@ -3,7 +3,7 @@
 //! Provides PostgreSQL connection pool creation and management.
 
 use anyhow::Result;
-use sqlx::postgres::{PgPoolOptions, PgConnectOptions};
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use sqlx::PgPool;
 use std::str::FromStr;
 
@@ -19,7 +19,7 @@ pub struct DatabaseConfig {
 #[allow(dead_code)]
 pub async fn create_pool(config: &DatabaseConfig) -> Result<PgPool> {
     let options = PgConnectOptions::from_str(&config.url)?;
-    
+
     let pool = PgPoolOptions::new()
         .max_connections(config.max_connections)
         .connect_with(options)

@@ -44,13 +44,19 @@ impl IntoResponse for ApiError {
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
             ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::Conflict(msg) => (StatusCode::CONFLICT, msg),
-            ApiError::Database(ref err) => {
-                match err {
-                    sqlx::Error::RowNotFound => (StatusCode::NOT_FOUND, "Resource not found".to_string()),
-                    _ => (StatusCode::INTERNAL_SERVER_ERROR, "Database error".to_string()),
+            ApiError::Database(ref err) => match err {
+                sqlx::Error::RowNotFound => {
+                    (StatusCode::NOT_FOUND, "Resource not found".to_string())
                 }
-            }
-            ApiError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string()),
+                _ => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Database error".to_string(),
+                ),
+            },
+            ApiError::Internal(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            ),
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::Json(e) => (StatusCode::BAD_REQUEST, format!("JSON error: {}", e)),

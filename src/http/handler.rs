@@ -27,6 +27,7 @@ pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Infallible>;
 
 /// 路由匹配结果
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum RouteMatch {
     /// 代理转发
     Proxy {
@@ -123,7 +124,7 @@ fn apply_request_modifications(
     if let Some(request_config) = &location.request {
         let method = if let Some(m) = &request_config.method {
             hyper::http::Method::try_from(m.as_str())
-                .map_err(|e| MystiProxyError::Proxy(format!("Invalid method: {}", e)))?
+                .map_err(|e| MystiProxyError::Proxy(format!("Invalid method: {e}")))?
         } else {
             request.method().clone()
         };
@@ -133,12 +134,12 @@ fn apply_request_modifications(
             let query = uri_config.query.as_deref();
 
             let new_uri = hyper::http::Uri::builder().path_and_query(if let Some(q) = query {
-                format!("{}?{}", path, q)
+                format!("{path}?{q}")
             } else {
                 path.to_string()
             });
 
-            new_uri.build().map_err(|e| MystiProxyError::Http(e))?
+            new_uri.build().map_err(MystiProxyError::Http)?
         } else {
             request.uri().clone()
         };
@@ -183,7 +184,7 @@ fn apply_request_modifications(
 
         return new_request
             .body(request.into_body())
-            .map_err(|e| MystiProxyError::Http(e));
+            .map_err(MystiProxyError::Http);
     }
 
     if let Some(headers) = &config.header {
@@ -211,7 +212,7 @@ fn apply_request_modifications(
 
         return new_request
             .body(request.into_body())
-            .map_err(|e| MystiProxyError::Http(e));
+            .map_err(MystiProxyError::Http);
     }
 
     Ok(request)
@@ -291,7 +292,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let mut builder =
                         Response::builder().status(StatusCode::from_u16(mock.status).map_err(
-                            |e| MystiProxyError::Proxy(format!("Invalid status code: {}", e)),
+                            |e| MystiProxyError::Proxy(format!("Invalid status code: {e}")),
                         )?);
 
                     for (key, value) in &mock.headers {
@@ -304,7 +305,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         Self::full_body(Bytes::from(mock.body))
                     };
 
-                    let response = builder.body(body).map_err(|e| MystiProxyError::Http(e))?;
+                    let response = builder.body(body).map_err(MystiProxyError::Http)?;
 
                     Ok(response)
                 }
@@ -319,7 +320,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                     let response = Response::builder()
                         .status(StatusCode::NOT_FOUND)
                         .body(Self::empty_body())
-                        .map_err(|e| MystiProxyError::Http(e))?;
+                        .map_err(MystiProxyError::Http)?;
 
                     Ok(response)
                 }

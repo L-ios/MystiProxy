@@ -13,12 +13,8 @@ pub mod services;
 // Re-exports for convenience
 pub use config::Config;
 pub use error::ApiError;
-pub use models::{
-    MockConfiguration, MockFilter, VersionVector,
-    Environment, MystiProxyInstance,
-};
+pub use models::{Environment, MockConfiguration, MockFilter, MystiProxyInstance, VersionVector};
 pub use services::{
-    MockRepository, PostgresMockRepository,
-    MockService, EnvironmentService, InstanceService,
-    AuthService,
+    AuthService, EnvironmentService, InstanceService, MockRepository, MockService,
+    PostgresMockRepository,
 };

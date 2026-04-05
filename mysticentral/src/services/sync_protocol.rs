@@ -178,7 +178,9 @@ mod tests {
 
         let decoded: SyncMessage = serde_json::from_str(&json).unwrap();
         match decoded {
-            SyncMessage::Heartbeat { config_checksum, .. } => {
+            SyncMessage::Heartbeat {
+                config_checksum, ..
+            } => {
                 assert_eq!(config_checksum, Some("abc123".to_string()));
             }
             _ => panic!("Wrong message type"),

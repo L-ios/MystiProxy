@@ -10,11 +10,9 @@ use std::thread;
 static THREAD_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
-    /// 当前线程关联的引擎名称
-    static ENGINE_NAME: RefCell<Option<String>> = RefCell::new(None);
-    
-    /// 当前线程的唯一 ID
-    static THREAD_ID: RefCell<Option<u64>> = RefCell::new(None);
+    static ENGINE_NAME: RefCell<Option<String>> = const { RefCell::new(None) };
+
+    static THREAD_ID: RefCell<Option<u64>> = const { RefCell::new(None) };
 }
 
 /// 获取或分配当前线程的唯一 ID
@@ -57,8 +55,8 @@ pub fn thread_identity() -> String {
         .to_string();
 
     match engine_name {
-        Some(engine) => format!("{}:{}:{}", engine, thread_id, thread_name),
-        None => format!("{}:{}", thread_id, thread_name),
+        Some(engine) => format!("{engine}:{thread_id}:{thread_name}"),
+        None => format!("{thread_id}:{thread_name}"),
     }
 }
 

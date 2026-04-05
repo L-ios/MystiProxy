@@ -158,8 +158,8 @@ impl Router {
             // 如果 pattern 不以 / 结尾，remaining 应该为空或以 / 开头
             if remaining.is_empty() {
                 remaining
-            } else if remaining.starts_with('/') {
-                remaining[1..].to_string()
+            } else if let Some(stripped) = remaining.strip_prefix('/') {
+                stripped.to_string()
             } else {
                 // 不合理的情况，例如 pattern = /a/b, uri = /a/bc
                 return None;
@@ -178,11 +178,9 @@ impl Router {
             let mut params = HashMap::new();
 
             // 提取所有命名捕获组
-            for name in regex.capture_names() {
-                if let Some(name) = name {
-                    if let Some(value) = captures.name(name) {
-                        params.insert(name.to_string(), value.as_str().to_string());
-                    }
+            for name in regex.capture_names().flatten() {
+                if let Some(value) = captures.name(name) {
+                    params.insert(name.to_string(), value.as_str().to_string());
                 }
             }
 
@@ -206,11 +204,9 @@ impl Router {
             let mut params = HashMap::new();
 
             // 提取所有命名捕获组
-            for name in regex.capture_names() {
-                if let Some(name) = name {
-                    if let Some(value) = captures.name(name) {
-                        params.insert(name.to_string(), value.as_str().to_string());
-                    }
+            for name in regex.capture_names().flatten() {
+                if let Some(value) = captures.name(name) {
+                    params.insert(name.to_string(), value.as_str().to_string());
                 }
             }
 
@@ -226,8 +222,8 @@ impl Router {
             let remaining = uri[matched.len()..].to_string();
 
             // 去掉开头的 /
-            let remaining = if remaining.starts_with('/') {
-                remaining[1..].to_string()
+            let remaining = if let Some(stripped) = remaining.strip_prefix('/') {
+                stripped.to_string()
             } else {
                 remaining
             };
@@ -266,7 +262,7 @@ pub fn pattern_to_regex(pattern: &str, is_exact: bool) -> crate::Result<Regex> {
             }
 
             // 添加命名捕获组，匹配非 / 的字符
-            regex_str.push_str(&format!(r"(?P<{}>[^/]+)", param_name));
+            regex_str.push_str(&format!(r"(?P<{param_name}>[^/]+)"));
         } else {
             // 转义正则特殊字符
             match c {

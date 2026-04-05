@@ -265,14 +265,14 @@ fn parse_duration(s: &str) -> Result<Duration, String> {
 
     let num: f64 = num_str
         .parse()
-        .map_err(|e| format!("invalid duration number: {}", e))?;
+        .map_err(|e| format!("invalid duration number: {e}"))?;
 
     let duration = match unit_str.as_str() {
         "ms" => Duration::from_secs_f64(num / 1000.0),
         "s" => Duration::from_secs_f64(num),
         "m" => Duration::from_secs_f64(num * 60.0),
         "h" => Duration::from_secs_f64(num * 3600.0),
-        _ => return Err(format!("unknown duration unit: {}", unit_str)),
+        _ => return Err(format!("unknown duration unit: {unit_str}")),
     };
 
     Ok(duration)

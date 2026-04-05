@@ -12,7 +12,12 @@ use serde::Deserialize;
 #[command(author, version, about, long_about = None)]
 pub struct CliArgs {
     /// Server listen address (e.g., "0.0.0.0:8080")
-    #[arg(short, long, env = "MYSTICENTRAL_SERVER_ADDR", default_value = "0.0.0.0:8080")]
+    #[arg(
+        short,
+        long,
+        env = "MYSTICENTRAL_SERVER_ADDR",
+        default_value = "0.0.0.0:8080"
+    )]
     pub addr: String,
 
     /// PostgreSQL connection URL
@@ -20,7 +25,11 @@ pub struct CliArgs {
     pub database_url: String,
 
     /// Maximum number of database connections
-    #[arg(long, env = "MYSTICENTRAL_DATABASE_MAX_CONNECTIONS", default_value = "10")]
+    #[arg(
+        long,
+        env = "MYSTICENTRAL_DATABASE_MAX_CONNECTIONS",
+        default_value = "10"
+    )]
     pub database_max_connections: u32,
 
     /// JWT secret key for signing tokens
@@ -56,7 +65,11 @@ pub struct CliArgs {
     pub tls_enable_alpn: bool,
 
     /// ALPN protocols to advertise (comma-separated, e.g., "h2,http/1.1")
-    #[arg(long, env = "MYSTICENTRAL_TLS_ALPN_PROTOCOLS", default_value = "h2,http/1.1")]
+    #[arg(
+        long,
+        env = "MYSTICENTRAL_TLS_ALPN_PROTOCOLS",
+        default_value = "h2,http/1.1"
+    )]
     pub tls_alpn_protocols: String,
 
     /// Enable certificate hot reload
@@ -178,9 +191,7 @@ impl Config {
     pub fn from_args() -> Result<Self> {
         let args = CliArgs::parse();
 
-        let server = ServerConfig {
-            addr: args.addr,
-        };
+        let server = ServerConfig { addr: args.addr };
 
         let database = DatabaseConfig {
             url: args.database_url,
@@ -195,18 +206,18 @@ impl Config {
         let tls = if let Some(cert_path) = args.tls_cert_path {
             let key_path = args.tls_key_path
                 .context("TLS key path is required when cert path is provided. Use --tls-key-path or MYSTICENTRAL_TLS_KEY_PATH")?;
-            
-            let min_version = parse_tls_version(&args.tls_min_version)
-                .unwrap_or_default();
-            
-            let max_version = parse_tls_version(&args.tls_max_version)
-                .unwrap_or_else(default_max_tls_version);
-            
-            let alpn_protocols = args.tls_alpn_protocols
+
+            let min_version = parse_tls_version(&args.tls_min_version).unwrap_or_default();
+
+            let max_version =
+                parse_tls_version(&args.tls_max_version).unwrap_or_else(default_max_tls_version);
+
+            let alpn_protocols = args
+                .tls_alpn_protocols
                 .split(',')
                 .map(|p| p.trim().to_string())
                 .collect();
-            
+
             Some(TlsConfig {
                 cert_path,
                 key_path,
@@ -221,7 +232,12 @@ impl Config {
             None
         };
 
-        Ok(Config { server, database, jwt, tls })
+        Ok(Config {
+            server,
+            database,
+            jwt,
+            tls,
+        })
     }
 
     /// Load configuration from environment variables (legacy method)

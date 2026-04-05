@@ -154,7 +154,7 @@ impl MockBuilder {
     /// - 正则匹配: `regex:/api/.*`
     fn matches_uri(uri: &str, pattern: &str) -> bool {
         // 解析 URI，提取路径部分
-        let path = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri)) {
+        let path = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{uri}")) {
             parsed.path().to_string()
         } else {
             uri.to_string()
@@ -185,7 +185,7 @@ impl MockBuilder {
     /// - 正则匹配: `key=regex:pattern`
     fn matches_query(uri: &str, pattern: &str) -> bool {
         // 解析 URI，提取查询参数
-        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri))
+        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{uri}"))
         {
             parsed.query().unwrap_or("").to_string()
         } else {
@@ -381,7 +381,7 @@ impl MockBuilder {
     pub fn build_response(config: &ResponseConfig) -> Result<Response<BoxBody>> {
         let mut builder = Response::builder().status(
             StatusCode::from_u16(config.status.unwrap_or(200))
-                .map_err(|e| MystiProxyError::Mock(format!("Invalid status code: {}", e)))?,
+                .map_err(|e| MystiProxyError::Mock(format!("Invalid status code: {e}")))?,
         );
 
         // 添加 headers
@@ -469,14 +469,14 @@ impl MockLocation {
         let regex = if config.mode == MatchMode::Regex || config.mode == MatchMode::PrefixRegex {
             Some(
                 Regex::new(&config.location)
-                    .map_err(|e| MystiProxyError::Mock(format!("Invalid regex pattern: {}", e)))?,
+                    .map_err(|e| MystiProxyError::Mock(format!("Invalid regex pattern: {e}")))?,
             )
         } else {
             None
         };
 
         // 获取响应配置，如果没有则创建默认配置
-        let response = config.response.clone().unwrap_or_else(|| ResponseConfig {
+        let response = config.response.clone().unwrap_or(ResponseConfig {
             status: Some(200),
             headers: None,
             body: None,
@@ -517,7 +517,7 @@ impl MockLocation {
     /// 检查请求是否完全匹配（路径 + 条件）
     pub fn matches_request(&self, uri: &str, headers: &HeaderMap, body: Option<&Value>) -> bool {
         // 首先检查路径匹配
-        let path = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{}", uri)) {
+        let path = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{uri}")) {
             parsed.path().to_string()
         } else {
             uri.to_string()

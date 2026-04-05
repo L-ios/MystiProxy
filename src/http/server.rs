@@ -129,7 +129,7 @@ where
             match tokio::time::timeout(duration, conn).await {
                 Ok(result) => {
                     result
-                        .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {}", e)))?;
+                        .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {e}")))?;
                 }
                 Err(_) => {
                     warn!("Connection timed out after {:?}", duration);
@@ -138,7 +138,7 @@ where
             }
         } else {
             conn.await
-                .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {}", e)))?;
+                .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {e}")))?;
         }
 
         Ok(())
@@ -191,7 +191,7 @@ impl Service<Request<Incoming>> for HttpProxyService {
                 .title_case_headers(true)
                 .handshake(io)
                 .await
-                .map_err(|e| MystiProxyError::Proxy(format!("Handshake failed: {}", e)))?;
+                .map_err(|e| MystiProxyError::Proxy(format!("Handshake failed: {e}")))?;
 
             // 在后台维护连接
             tokio::spawn(async move {
@@ -207,7 +207,7 @@ impl Service<Request<Incoming>> for HttpProxyService {
             let new_uri = hyper::http::Uri::builder()
                 .path_and_query(path_and_query)
                 .build()
-                .map_err(|e| MystiProxyError::Http(e))?;
+                .map_err(MystiProxyError::Http)?;
 
             // 构建新请求
             let mut new_request = Request::builder().method(req.method().clone()).uri(new_uri);
@@ -219,19 +219,19 @@ impl Service<Request<Incoming>> for HttpProxyService {
 
             let new_request = new_request
                 .body(req.into_body())
-                .map_err(|e| MystiProxyError::Http(e))?;
+                .map_err(MystiProxyError::Http)?;
 
             // 发送请求
             let response = if let Some(duration) = timeout {
                 tokio::time::timeout(duration, sender.send_request(new_request))
                     .await
                     .map_err(|_| MystiProxyError::Timeout)?
-                    .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {}", e)))?
+                    .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {e}")))?
             } else {
                 sender
                     .send_request(new_request)
                     .await
-                    .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {}", e)))?
+                    .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {e}")))?
             };
 
             // 转换响应体

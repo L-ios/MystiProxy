@@ -48,16 +48,12 @@ async fn main() -> Result<()> {
     tracing::info!("Database connection pool created");
 
     // Run migrations
-    sqlx::migrate!("./src/db/migrations")
-        .run(&db_pool)
-        .await?;
+    sqlx::migrate!("./src/db/migrations").run(&db_pool).await?;
     tracing::info!("Database migrations completed");
 
     // Create auth service
-    let auth_service = services::AuthService::new(
-        config.jwt.secret.clone(),
-        config.jwt.expiration_hours,
-    )?;
+    let auth_service =
+        services::AuthService::new(config.jwt.secret.clone(), config.jwt.expiration_hours)?;
     tracing::info!("Authentication service initialized");
 
     // Build application state

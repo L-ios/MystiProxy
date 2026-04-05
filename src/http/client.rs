@@ -61,7 +61,7 @@ impl HttpClient {
             .handshake(io)
             .await
             .map_err(|e| {
-                MystiProxyError::Proxy(format!("Failed to establish connection: {}", e))
+                MystiProxyError::Proxy(format!("Failed to establish connection: {e}"))
             })?;
 
         // 在后台任务中维护连接
@@ -85,7 +85,7 @@ impl HttpClient {
         let new_uri = hyper::http::Uri::builder()
             .path_and_query(path_and_query)
             .build()
-            .map_err(|e| MystiProxyError::Http(e))?;
+            .map_err(MystiProxyError::Http)?;
 
         // 创建新的请求
         let mut new_request = Request::builder()
@@ -108,7 +108,7 @@ impl HttpClient {
 
         let new_request = new_request
             .body(request.into_body())
-            .map_err(|e| MystiProxyError::Http(e))?;
+            .map_err(MystiProxyError::Http)?;
 
         debug!(
             "Sending request to {}: {} {}",
@@ -125,12 +125,12 @@ impl HttpClient {
             tokio::time::timeout(timeout, sender.send_request(new_request))
                 .await
                 .map_err(|_| MystiProxyError::Timeout)?
-                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {}", e)))?
+                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
         } else {
             sender
                 .send_request(new_request)
                 .await
-                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {}", e)))?
+                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
         };
 
         info!(

@@ -10,14 +10,9 @@ use tokio::signal;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
 use tracing_subscriber::{
-    EnvFilter,
-    fmt::{
-        format::Writer,
-        FmtContext,
-        FormatEvent,
-        FormatFields,
-    },
+    fmt::{format::Writer, FmtContext, FormatEvent, FormatFields},
     registry::Registry,
+    EnvFilter,
 };
 
 mod arg;
@@ -71,10 +66,8 @@ async fn main() -> Result<()> {
     let args = MystiArg::parse();
 
     // 初始化日志 - 使用 fmt::SubscriberBuilder 来正确配置自定义格式
-    let filter = EnvFilter::new(
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-    );
-    
+    let filter = EnvFilter::new(std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()));
+
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .event_format(CustomFormatter)

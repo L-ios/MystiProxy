@@ -2,7 +2,9 @@
 //!
 //! 测试 TLS 连接、ALPN 协商、mTLS 双向认证等功能
 
-use mystiproxy::tls::{TlsConfig, TlsServer, create_tls_connector, create_tls_connector_with_client_cert};
+use mystiproxy::tls::{
+    create_tls_connector, create_tls_connector_with_client_cert, TlsConfig, TlsServer,
+};
 use std::io::Write;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
@@ -58,7 +60,7 @@ fn create_temp_cert_files() -> (NamedTempFile, NamedTempFile) {
 #[tokio::test]
 async fn test_tls_handshake() {
     init_crypto_provider();
-    
+
     // 创建临时证书文件
     let (cert_file, key_file) = create_temp_cert_files();
 
@@ -112,7 +114,7 @@ async fn test_tls_handshake() {
 #[tokio::test]
 async fn test_tls_with_client_ca() {
     init_crypto_provider();
-    
+
     // 创建临时证书文件
     let (cert_file, key_file) = create_temp_cert_files();
 
@@ -174,7 +176,7 @@ async fn test_tls_with_client_ca() {
 #[tokio::test]
 async fn test_multiple_tls_connections() {
     init_crypto_provider();
-    
+
     // 创建临时证书文件
     let (cert_file, key_file) = create_temp_cert_files();
 
@@ -227,7 +229,7 @@ async fn test_multiple_tls_connections() {
 #[tokio::test]
 async fn test_tls_large_data() {
     init_crypto_provider();
-    
+
     // 创建临时证书文件
     let (cert_file, key_file) = create_temp_cert_files();
 
@@ -294,7 +296,7 @@ async fn test_tls_large_data() {
 #[tokio::test]
 async fn test_tls_concurrent_connections() {
     init_crypto_provider();
-    
+
     // 创建临时证书文件
     let (cert_file, key_file) = create_temp_cert_files();
 
@@ -361,7 +363,7 @@ async fn test_tls_concurrent_connections() {
 #[test]
 fn test_tls_config_reload() {
     init_crypto_provider();
-    
+
     // 测试 TLS 配置可以重新加载
     let (cert_file1, key_file1) = create_temp_cert_files();
     let (cert_file2, key_file2) = create_temp_cert_files();

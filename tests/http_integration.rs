@@ -9,8 +9,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mystiproxy::config::{
-    BodyConfig, BodyType, EngineConfig, HeaderAction, HeaderActionType, LocationConfig,
-    MatchMode, ProviderType, ProxyType, ResponseConfig,
+    BodyConfig, BodyType, EngineConfig, HeaderAction, HeaderActionType, LocationConfig, MatchMode,
+    ProviderType, ProxyType, ResponseConfig,
 };
 use mystiproxy::http::{create_handler, HttpServer, HttpServerConfig};
 use mystiproxy::io::SocketStream;
@@ -56,10 +56,7 @@ async fn start_test_server(locations: Vec<LocationConfig>) -> String {
     let handler = create_handler(Arc::new(config)).expect("failed to create handler");
 
     let mut server = HttpServer::new(HttpServerConfig::new(listen.clone(), None), handler);
-    server
-        .start()
-        .await
-        .expect("failed to start test server");
+    server.start().await.expect("failed to start test server");
 
     tokio::spawn(async move {
         let _ = server.run().await;
@@ -83,7 +80,8 @@ async fn send_raw_http(addr: &str, method: &str, path: &str) -> String {
         .await
         .expect("failed to connect to test server");
 
-    let request = format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+    let request =
+        format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
     stream
         .write_all(request.as_bytes())
         .await
@@ -93,7 +91,10 @@ async fn send_raw_http(addr: &str, method: &str, path: &str) -> String {
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut buf = [0u8; 8192];
         loop {
-            let n = stream.read(&mut buf).await.expect("failed to read response");
+            let n = stream
+                .read(&mut buf)
+                .await
+                .expect("failed to read response");
             if n == 0 {
                 break;
             }
@@ -156,11 +157,7 @@ fn static_location(path: &str, mode: MatchMode, root: &str) -> LocationConfig {
     }
 }
 
-fn mock_location_with_static_body(
-    path: &str,
-    mode: MatchMode,
-    status: u16,
-) -> LocationConfig {
+fn mock_location_with_static_body(path: &str, mode: MatchMode, status: u16) -> LocationConfig {
     LocationConfig {
         location: path.to_string(),
         mode,
@@ -267,8 +264,7 @@ async fn test_mock_response_with_static_body_type() {
 async fn test_static_file_serving() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let index_path = temp_dir.path().join("index.html");
-    std::fs::write(&index_path, "<h1>hello from static</h1>")
-        .expect("failed to write index.html");
+    std::fs::write(&index_path, "<h1>hello from static</h1>").expect("failed to write index.html");
 
     let root = temp_dir.path().to_string_lossy().to_string();
     let addr = start_test_server(vec![static_location("/", MatchMode::Prefix, &root)]).await;

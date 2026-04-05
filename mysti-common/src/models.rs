@@ -495,13 +495,8 @@ impl MockConfiguration {
         let id = Uuid::new_v4();
         let version_vector = VersionVector::with_instance(id);
 
-        let content_hash = Self::compute_content_hash(
-            &name,
-            &path,
-            &method,
-            &matching_rules,
-            &response_config,
-        );
+        let content_hash =
+            Self::compute_content_hash(&name, &path, &method, &matching_rules, &response_config);
 
         Self {
             id,
@@ -535,8 +530,16 @@ impl MockConfiguration {
         hasher.update(name.as_bytes());
         hasher.update(path.as_bytes());
         hasher.update(method.to_string().as_bytes());
-        hasher.update(serde_json::to_string(matching_rules).unwrap_or_default().as_bytes());
-        hasher.update(serde_json::to_string(response_config).unwrap_or_default().as_bytes());
+        hasher.update(
+            serde_json::to_string(matching_rules)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
+        hasher.update(
+            serde_json::to_string(response_config)
+                .unwrap_or_default()
+                .as_bytes(),
+        );
         hex::encode(hasher.finalize())
     }
 
@@ -605,7 +608,8 @@ impl MockFilter {
 
     /// Calculate offset from page
     pub fn offset(&self) -> u32 {
-        self.offset.unwrap_or_else(|| (self.page() - 1) * self.limit())
+        self.offset
+            .unwrap_or_else(|| (self.page() - 1) * self.limit())
     }
 }
 

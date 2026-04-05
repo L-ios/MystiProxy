@@ -71,10 +71,8 @@ impl MockRepository for PostgresMockRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let configs: Result<Vec<MockConfiguration>, _> = rows
-            .into_iter()
-            .map(|r| r.into_config())
-            .collect();
+        let configs: Result<Vec<MockConfiguration>, _> =
+            rows.into_iter().map(|r| r.into_config()).collect();
 
         Ok(configs?)
     }
@@ -82,7 +80,9 @@ impl MockRepository for PostgresMockRepository {
     async fn save(&self, config: &MockConfiguration) -> Result<(), ApiError> {
         let matching_rules = serde_json::to_value(&config.matching_rules)?;
         let response_config = serde_json::to_value(&config.response_config)?;
-        let state_config = config.state_config.as_ref()
+        let state_config = config
+            .state_config
+            .as_ref()
             .map(|s| serde_json::to_value(s))
             .transpose()?;
         let version_vector = serde_json::to_value(&config.version_vector)?;

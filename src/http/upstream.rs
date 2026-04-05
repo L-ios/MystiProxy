@@ -114,12 +114,12 @@ impl UpstreamProxyConfig {
         let url = url.trim();
 
         // 解析协议
-        let (protocol, rest) = if url.starts_with("https://") {
-            (UpstreamProtocol::Https, &url[8..])
-        } else if url.starts_with("http://") {
-            (UpstreamProtocol::Http, &url[7..])
-        } else if url.starts_with("socks5://") {
-            (UpstreamProtocol::Socks5, &url[9..])
+        let (protocol, rest) = if let Some(stripped) = url.strip_prefix("https://") {
+            (UpstreamProtocol::Https, stripped)
+        } else if let Some(stripped) = url.strip_prefix("http://") {
+            (UpstreamProtocol::Http, stripped)
+        } else if let Some(stripped) = url.strip_prefix("socks5://") {
+            (UpstreamProtocol::Socks5, stripped)
         } else {
             (UpstreamProtocol::Http, url)
         };
@@ -145,7 +145,7 @@ impl UpstreamProxyConfig {
             let host = &host_port[..colon_pos];
             let port: u16 = host_port[colon_pos + 1..]
                 .parse()
-                .map_err(|e| MystiProxyError::Config(format!("Invalid port: {}", e)))?;
+                .map_err(|e| MystiProxyError::Config(format!("Invalid port: {e}")))?;
             (host.to_string(), port)
         } else {
             return Err(MystiProxyError::Config("Missing port in proxy URL".to_string()));
@@ -242,7 +242,7 @@ impl UpstreamProxyConnector {
         )
         .await
         .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to upstream {}: {}", addr, e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to upstream {addr}: {e}")))?;
 
         log_debug!("Connected to upstream proxy: {}", addr);
         Ok(stream)
@@ -263,8 +263,7 @@ impl UpstreamProxyConnector {
 
         // 发送 CONNECT 请求
         let connect_request = format!(
-            "CONNECT {}:{} HTTP/1.1\r\nHost: {}:{}\r\n",
-            target_host, target_port, target_host, target_port
+            "CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n"
         );
 
         let connect_request = match &self.config.auth {
@@ -273,7 +272,7 @@ impl UpstreamProxyConnector {
                 connect_request,
                 auth.to_proxy_authorization()
             ),
-            None => format!("{}\r\n", connect_request),
+            None => format!("{connect_request}\r\n"),
         };
 
         log_debug!("Sending CONNECT request to upstream: {}:{} via {}",
@@ -301,8 +300,7 @@ impl UpstreamProxyConnector {
         } else {
             log_error!("CONNECT failed: {}", first_line);
             Err(MystiProxyError::Proxy(format!(
-                "Upstream proxy CONNECT failed: {}",
-                first_line
+                "Upstream proxy CONNECT failed: {first_line}"
             )))
         }
     }
@@ -329,21 +327,23 @@ impl UpstreamProxyConnector {
         };
 
         // 构建请求
-        let mut request = format!("{} http://{}:{}{} HTTP/1.1\r\n", method, target_host, target_port, path);
+        let mut request = format!("{method} http://{target_host}:{target_port}{path} HTTP/1.1\r\n");
 
         // 添加主机头
-        request.push_str(&format!("Host: {}:{}\r\n", target_host, target_port));
+        request.push_str(&format!("Host: {target_host}:{target_port}\r\n"));
 
         // 添加其他头
         for (key, value) in headers {
             if key.to_lowercase() != "host" && key.to_lowercase() != "proxy-authorization" {
-                request.push_str(&format!("{}: {}\r\n", key, value));
+                request.push_str(&format!("{key}: {value}\r\n"));
             }
         }
 
         // 添加上游代理认证
         if let Some(auth) = &self.config.auth {
-            request.push_str(&format!("Proxy-Authorization: {}\r\n", auth.to_proxy_authorization()));
+            if !headers.contains_key("proxy-authorization") {
+                request.push_str(&format!("Proxy-Authorization: {}\r\n", auth.to_proxy_authorization()));
+            }
         }
 
         // 添加连接头
@@ -505,7 +505,7 @@ impl ProxyConverter {
             let host = &target[..colon_pos];
             let port: u16 = target[colon_pos + 1..]
                 .parse()
-                .map_err(|e| MystiProxyError::Proxy(format!("Invalid port: {}", e)))?;
+                .map_err(|e| MystiProxyError::Proxy(format!("Invalid port: {e}")))?;
             Ok((host.to_string(), port))
         } else {
             Ok((target.to_string(), 443))

@@ -63,7 +63,8 @@ async fn test_tcp_proxy_forwarding() {
         locations: None,
     };
 
-    let mut server = ProxyServer::from_engine_config(&config).expect("failed to create ProxyServer");
+    let mut server =
+        ProxyServer::from_engine_config(&config).expect("failed to create ProxyServer");
     server.start().await.expect("failed to start ProxyServer");
 
     tokio::spawn(async move {
@@ -72,19 +73,15 @@ async fn test_tcp_proxy_forwarding() {
 
     wait_for_readiness().await;
 
-    let mut client =
-        tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
-            .await
-            .expect("failed to connect to proxy");
+    let mut client = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
+        .await
+        .expect("failed to connect to proxy");
 
     let payload = b"hello proxy";
     client.write_all(payload).await.expect("write failed");
 
     let mut buf = vec![0u8; payload.len()];
-    client
-        .read_exact(&mut buf)
-        .await
-        .expect("read failed");
+    client.read_exact(&mut buf).await.expect("read failed");
 
     assert_eq!(&buf[..], payload);
 }
@@ -104,7 +101,8 @@ async fn test_tcp_proxy_with_timeout() {
         locations: None,
     };
 
-    let mut server = ProxyServer::from_engine_config(&config).expect("failed to create ProxyServer");
+    let mut server =
+        ProxyServer::from_engine_config(&config).expect("failed to create ProxyServer");
     server.start().await.expect("failed to start ProxyServer");
 
     tokio::spawn(async move {
@@ -113,10 +111,9 @@ async fn test_tcp_proxy_with_timeout() {
 
     wait_for_readiness().await;
 
-    let mut client =
-        tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
-            .await
-            .expect("failed to connect to proxy");
+    let mut client = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
+        .await
+        .expect("failed to connect to proxy");
 
     let payload = b"timed hello";
     client.write_all(payload).await.expect("write failed");
@@ -146,10 +143,9 @@ async fn test_stream_listener_tcp() {
 
     wait_for_readiness().await;
 
-    let _connected =
-        tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
-            .await
-            .expect("failed to connect");
+    let _connected = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", port))
+        .await
+        .expect("failed to connect");
 
     let stream = tokio::time::timeout(Duration::from_secs(2), accept_task)
         .await
@@ -194,10 +190,9 @@ async fn test_socket_stream_tcp_connect() {
 
     wait_for_readiness().await;
 
-    let mut stream =
-        SocketStream::connect(format!("tcp://127.0.0.1:{}", port))
-            .await
-            .expect("SocketStream connect failed");
+    let mut stream = SocketStream::connect(format!("tcp://127.0.0.1:{}", port))
+        .await
+        .expect("SocketStream connect failed");
 
     let payload = b"socket stream test";
     stream.write_all(payload).await.expect("write failed");
@@ -217,7 +212,10 @@ async fn test_socket_stream_invalid_protocol() {
 #[tokio::test]
 async fn test_socket_stream_no_protocol() {
     let result = SocketStream::connect("no-protocol".to_string()).await;
-    assert!(result.is_err(), "expected error for missing protocol separator");
+    assert!(
+        result.is_err(),
+        "expected error for missing protocol separator"
+    );
 }
 
 #[tokio::test]
@@ -253,10 +251,9 @@ async fn test_stream_listener_unix() {
 
     wait_for_readiness().await;
 
-    let mut stream =
-        SocketStream::connect(format!("unix://{}", socket_path.display()))
-            .await
-            .expect("failed to connect UDS SocketStream");
+    let mut stream = SocketStream::connect(format!("unix://{}", socket_path.display()))
+        .await
+        .expect("failed to connect UDS SocketStream");
 
     let payload = b"uds hello";
     stream.write_all(payload).await.expect("write failed");
@@ -287,8 +284,14 @@ async fn test_proxy_server_lifecycle() {
 
     server.start().await.expect("start failed");
 
-    assert!(server.listen_addr().is_tcp(), "listen address should be TCP");
-    assert!(server.target_addr().is_tcp(), "target address should be TCP");
+    assert!(
+        server.listen_addr().is_tcp(),
+        "listen address should be TCP"
+    );
+    assert!(
+        server.target_addr().is_tcp(),
+        "target address should be TCP"
+    );
 
     tokio::spawn(async move {
         let _ = server.run().await;
@@ -296,10 +299,9 @@ async fn test_proxy_server_lifecycle() {
 
     wait_for_readiness().await;
 
-    let mut client =
-        tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
-            .await
-            .expect("failed to connect to proxy");
+    let mut client = tokio::net::TcpStream::connect(format!("127.0.0.1:{}", proxy_port))
+        .await
+        .expect("failed to connect to proxy");
 
     let payload = b"lifecycle test";
     client.write_all(payload).await.expect("write failed");

@@ -17,11 +17,11 @@ use crate::models::user::{LoginResponse, User, UserInfo, UserRole};
 /// JWT claims
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: Uuid,      // User ID
+    pub sub: Uuid, // User ID
     pub username: String,
     pub role: UserRole,
-    pub exp: usize,     // Expiration time (Unix timestamp)
-    pub iat: usize,     // Issued at (Unix timestamp)
+    pub exp: usize, // Expiration time (Unix timestamp)
+    pub iat: usize, // Issued at (Unix timestamp)
 }
 
 impl Claims {
@@ -30,7 +30,7 @@ impl Claims {
     pub fn new(user: &User, expires_in_hours: i64) -> Self {
         let now = Utc::now();
         let exp = now + Duration::hours(expires_in_hours);
-        
+
         Self {
             sub: user.id,
             username: user.username.clone(),
@@ -55,7 +55,7 @@ pub struct AuthService {
 
 impl AuthService {
     /// Create a new AuthService
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the JWT secret is empty or invalid
     pub fn new(jwt_secret: String, jwt_expiration_hours: i64) -> ApiResult<Self> {
@@ -101,26 +101,24 @@ impl AuthService {
     #[allow(dead_code)]
     pub fn validate_token(&self, token: &str) -> ApiResult<Claims> {
         let token_data = decode::<Claims>(token, &self.decoding_key, &Validation::default())
-            .map_err(|e| {
-                match e.kind() {
-                    jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
-                        ApiError::Unauthorized("Token has expired".to_string())
-                    }
-                    jsonwebtoken::errors::ErrorKind::InvalidToken => {
-                        ApiError::Unauthorized("Invalid token".to_string())
-                    }
-                    jsonwebtoken::errors::ErrorKind::InvalidSignature => {
-                        ApiError::Unauthorized("Invalid token signature".to_string())
-                    }
-                    _ => ApiError::Unauthorized(format!("Token validation failed: {}", e)),
+            .map_err(|e| match e.kind() {
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                    ApiError::Unauthorized("Token has expired".to_string())
                 }
+                jsonwebtoken::errors::ErrorKind::InvalidToken => {
+                    ApiError::Unauthorized("Invalid token".to_string())
+                }
+                jsonwebtoken::errors::ErrorKind::InvalidSignature => {
+                    ApiError::Unauthorized("Invalid token signature".to_string())
+                }
+                _ => ApiError::Unauthorized(format!("Token validation failed: {}", e)),
             })?;
 
         Ok(token_data.claims)
     }
 
     /// Hash a password using Argon2
-    /// 
+    ///
     /// Returns a PHC (Password Hashing Competition) format string that includes:
     /// - Algorithm identifier
     /// - Version
@@ -131,7 +129,7 @@ impl AuthService {
     pub fn hash_password(password: &str) -> ApiResult<String> {
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
-        
+
         argon2
             .hash_password(password.as_bytes(), &salt)
             .map(|hash| hash.to_string())
@@ -188,9 +186,7 @@ impl PermissionChecker {
             ),
             UserRole::Viewer => matches!(
                 action,
-                Permission::ReadMock
-                    | Permission::ReadEnvironment
-                    | Permission::ExportMocks
+                Permission::ReadMock | Permission::ReadEnvironment | Permission::ExportMocks
             ),
         }
     }
@@ -236,7 +232,7 @@ mod tests {
         // Both should verify correctly
         assert!(AuthService::verify_password(password, &hash));
         assert!(AuthService::verify_password(password, &hash2));
-        
+
         // Wrong password should fail
         assert!(!AuthService::verify_password("wrong_password", &hash));
     }
@@ -245,14 +241,15 @@ mod tests {
     fn test_password_hash_format() {
         let password = "test";
         let hash = AuthService::hash_password(password).unwrap();
-        
+
         // Argon2 hashes should start with $argon2
         assert!(hash.starts_with("$argon2"));
     }
 
     #[test]
     fn test_token_generation_and_validation() {
-        let service = AuthService::new("test-secret-key-for-testing-min-32-chars".to_string(), 24).unwrap();
+        let service =
+            AuthService::new("test-secret-key-for-testing-min-32-chars".to_string(), 24).unwrap();
         let user = User::new(
             "testuser".to_string(),
             "test@example.com".to_string(),
@@ -270,13 +267,15 @@ mod tests {
 
     #[test]
     fn test_invalid_token() {
-        let service = AuthService::new("test-secret-key-for-testing-min-32-chars".to_string(), 24).unwrap();
-        
+        let service =
+            AuthService::new("test-secret-key-for-testing-min-32-chars".to_string(), 24).unwrap();
+
         // Invalid token format
         assert!(service.validate_token("invalid.token.here").is_err());
-        
+
         // Token signed with different secret
-        let other_service = AuthService::new("different-secret-key-for-testing-32-chars".to_string(), 24).unwrap();
+        let other_service =
+            AuthService::new("different-secret-key-for-testing-32-chars".to_string(), 24).unwrap();
         let user = User::new(
             "testuser".to_string(),
             "test@example.com".to_string(),
@@ -284,17 +283,32 @@ mod tests {
             UserRole::Viewer,
         );
         let response = other_service.generate_token(&user).unwrap();
-        
+
         assert!(service.validate_token(&response.token).is_err());
     }
 
     #[test]
     fn test_permission_checker() {
-        assert!(PermissionChecker::can(UserRole::Admin, Permission::ManageUsers));
-        assert!(PermissionChecker::can(UserRole::Editor, Permission::CreateMock));
-        assert!(!PermissionChecker::can(UserRole::Editor, Permission::ManageUsers));
-        assert!(PermissionChecker::can(UserRole::Viewer, Permission::ReadMock));
-        assert!(!PermissionChecker::can(UserRole::Viewer, Permission::CreateMock));
+        assert!(PermissionChecker::can(
+            UserRole::Admin,
+            Permission::ManageUsers
+        ));
+        assert!(PermissionChecker::can(
+            UserRole::Editor,
+            Permission::CreateMock
+        ));
+        assert!(!PermissionChecker::can(
+            UserRole::Editor,
+            Permission::ManageUsers
+        ));
+        assert!(PermissionChecker::can(
+            UserRole::Viewer,
+            Permission::ReadMock
+        ));
+        assert!(!PermissionChecker::can(
+            UserRole::Viewer,
+            Permission::CreateMock
+        ));
     }
 
     #[test]

@@ -33,7 +33,7 @@ impl SocketStream {
             )),
             _ => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("unsupported protocol: {}", protocol),
+                format!("unsupported protocol: {protocol}"),
             )),
         }
     }

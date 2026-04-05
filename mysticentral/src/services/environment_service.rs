@@ -26,18 +26,25 @@ impl<R: EnvironmentRepository> EnvironmentService<R> {
     pub async fn create(&self, request: EnvironmentCreateRequest) -> ApiResult<Environment> {
         // Validate name
         if request.name.trim().is_empty() {
-            return Err(ApiError::Validation("Environment name cannot be empty".to_string()));
+            return Err(ApiError::Validation(
+                "Environment name cannot be empty".to_string(),
+            ));
         }
 
         // Create from template if specified
         let mut env = if let Some(template_id) = request.template_id {
-            let template = self.repository
+            let template = self
+                .repository
                 .find_by_id(template_id)
                 .await?
-                .ok_or_else(|| ApiError::NotFound(format!("Template with id {} not found", template_id)))?;
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Template with id {} not found", template_id))
+                })?;
 
             if !template.is_template {
-                return Err(ApiError::Validation("Specified environment is not a template".to_string()));
+                return Err(ApiError::Validation(
+                    "Specified environment is not a template".to_string(),
+                ));
             }
 
             Environment::from_template(request.name, &template)
@@ -73,12 +80,18 @@ impl<R: EnvironmentRepository> EnvironmentService<R> {
     }
 
     /// Update an environment
-    pub async fn update(&self, id: Uuid, request: EnvironmentUpdateRequest) -> ApiResult<Environment> {
+    pub async fn update(
+        &self,
+        id: Uuid,
+        request: EnvironmentUpdateRequest,
+    ) -> ApiResult<Environment> {
         let mut env = self.get(id).await?;
 
         if let Some(name) = request.name {
             if name.trim().is_empty() {
-                return Err(ApiError::Validation("Environment name cannot be empty".to_string()));
+                return Err(ApiError::Validation(
+                    "Environment name cannot be empty".to_string(),
+                ));
             }
             env.name = name;
         }
@@ -151,7 +164,10 @@ mod tests {
         async fn delete(&self, id: Uuid) -> Result<(), ApiError> {
             let mut envs = self.envs.write().await;
             if envs.remove(&id).is_none() {
-                return Err(ApiError::NotFound(format!("Environment with id {} not found", id)));
+                return Err(ApiError::NotFound(format!(
+                    "Environment with id {} not found",
+                    id
+                )));
             }
             Ok(())
         }

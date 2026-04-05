@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::error::{ApiError, ApiResult};
 use crate::models::{MockConfiguration, MockFilter};
 use crate::services::{
-    MockRepository, InstanceRepository,
-    SyncPullResponse, SyncPushResponse, SyncConflict, ConflictReason,
+    ConflictReason, InstanceRepository, MockRepository, SyncConflict, SyncPullResponse,
+    SyncPushResponse,
 };
 
 /// Service for handling synchronization
@@ -24,7 +24,10 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
     /// Create a new SyncService
     #[allow(dead_code)]
     pub fn new(mock_repo: MR, instance_repo: IR) -> Self {
-        Self { mock_repo, instance_repo }
+        Self {
+            mock_repo,
+            instance_repo,
+        }
     }
 
     /// Handle a pull request from an instance
@@ -36,7 +39,10 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
         known_checksums: HashMap<Uuid, String>,
     ) -> ApiResult<SyncPullResponse> {
         // Verify instance exists
-        let _instance = self.instance_repo.find_by_id(instance_id).await?
+        let _instance = self
+            .instance_repo
+            .find_by_id(instance_id)
+            .await?
             .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", instance_id)))?;
 
         // Get configurations modified since the given time
@@ -81,7 +87,10 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
         deleted_ids: Vec<Uuid>,
     ) -> ApiResult<SyncPushResponse> {
         // Verify instance exists
-        let _instance = self.instance_repo.find_by_id(instance_id).await?
+        let _instance = self
+            .instance_repo
+            .find_by_id(instance_id)
+            .await?
             .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", instance_id)))?;
 
         let mut accepted = Vec::new();
@@ -119,7 +128,10 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
         match self.mock_repo.find_by_id(config.id).await {
             Ok(Some(existing)) => {
                 // Check for conflicts using version vectors
-                if existing.version_vector.is_concurrent_with(&config.version_vector) {
+                if existing
+                    .version_vector
+                    .is_concurrent_with(&config.version_vector)
+                {
                     // Conflict detected
                     return Err(SyncConflict {
                         config_id: config.id,
@@ -140,29 +152,35 @@ impl<MR: MockRepository, IR: InstanceRepository> SyncService<MR, IR> {
                 }
 
                 // Save the configuration
-                self.mock_repo.save(config).await.map_err(|_e| SyncConflict {
-                    config_id: config.id,
-                    reason: ConflictReason::VersionMismatch,
-                    local: config.clone(),
-                    central: existing,
-                    detected_at: Utc::now(),
-                })?;
+                self.mock_repo
+                    .save(config)
+                    .await
+                    .map_err(|_e| SyncConflict {
+                        config_id: config.id,
+                        reason: ConflictReason::VersionMismatch,
+                        local: config.clone(),
+                        central: existing,
+                        detected_at: Utc::now(),
+                    })?;
             }
             Ok(None) => {
                 // New configuration, save it
-                self.mock_repo.save(config).await.map_err(|_e| SyncConflict {
-                    config_id: config.id,
-                    reason: ConflictReason::VersionMismatch,
-                    local: config.clone(),
-                    central: MockConfiguration::new(
-                        "placeholder".to_string(),
-                        "/placeholder".to_string(),
-                        crate::models::HttpMethod::Get,
-                        Default::default(),
-                        Default::default(),
-                    ),
-                    detected_at: Utc::now(),
-                })?;
+                self.mock_repo
+                    .save(config)
+                    .await
+                    .map_err(|_e| SyncConflict {
+                        config_id: config.id,
+                        reason: ConflictReason::VersionMismatch,
+                        local: config.clone(),
+                        central: MockConfiguration::new(
+                            "placeholder".to_string(),
+                            "/placeholder".to_string(),
+                            crate::models::HttpMethod::Get,
+                            Default::default(),
+                            Default::default(),
+                        ),
+                        detected_at: Utc::now(),
+                    })?;
             }
             Err(_e) => {
                 return Err(SyncConflict {
@@ -234,12 +252,18 @@ mod tests {
 
     #[async_trait::async_trait]
     impl InstanceRepository for InMemoryInstanceRepository {
-        async fn find_by_id(&self, id: Uuid) -> Result<Option<crate::models::MystiProxyInstance>, ApiError> {
+        async fn find_by_id(
+            &self,
+            id: Uuid,
+        ) -> Result<Option<crate::models::MystiProxyInstance>, ApiError> {
             let instances = self.instances.read().await;
             Ok(instances.get(&id).cloned())
         }
 
-        async fn find_all(&self, filter: crate::models::InstanceFilter) -> Result<Vec<crate::models::MystiProxyInstance>, ApiError> {
+        async fn find_all(
+            &self,
+            filter: crate::models::InstanceFilter,
+        ) -> Result<Vec<crate::models::MystiProxyInstance>, ApiError> {
             let instances = self.instances.read().await;
             Ok(instances.values().cloned().collect())
         }
@@ -261,7 +285,10 @@ mod tests {
             Ok(instances.len() as u32)
         }
 
-        async fn find_by_name(&self, name: &str) -> Result<Option<crate::models::MystiProxyInstance>, ApiError> {
+        async fn find_by_name(
+            &self,
+            name: &str,
+        ) -> Result<Option<crate::models::MystiProxyInstance>, ApiError> {
             let instances = self.instances.read().await;
             Ok(instances.values().find(|i| i.name == name).cloned())
         }
@@ -281,7 +308,10 @@ mod tests {
         instance_repo.save(&instance).await.unwrap();
 
         let service = SyncService::new(mock_repo, instance_repo);
-        let response = service.handle_pull(instance_id, None, HashMap::new()).await.unwrap();
+        let response = service
+            .handle_pull(instance_id, None, HashMap::new())
+            .await
+            .unwrap();
 
         assert!(response.configs.is_empty());
         assert!(response.deleted_ids.is_empty());
@@ -311,7 +341,10 @@ mod tests {
             ResponseConfig::default(),
         );
 
-        let response = service.handle_push(instance_id, vec![config.clone()], vec![]).await.unwrap();
+        let response = service
+            .handle_push(instance_id, vec![config.clone()], vec![])
+            .await
+            .unwrap();
 
         assert_eq!(response.accepted.len(), 1);
         assert!(response.conflicts.is_empty());

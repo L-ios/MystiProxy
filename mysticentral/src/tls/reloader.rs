@@ -227,17 +227,35 @@ mod tests {
         let mut builder = openssl::x509::X509Builder::new().unwrap();
         builder.set_version(2).unwrap();
         builder
-            .set_subject_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref())
+            .set_subject_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.set_issuer_name(openssl::x509::X509NameBuilder::new().unwrap().build().as_ref()).unwrap();
+        builder
+            .set_issuer_name(
+                openssl::x509::X509NameBuilder::new()
+                    .unwrap()
+                    .build()
+                    .as_ref(),
+            )
+            .unwrap();
         builder.set_pubkey(&pkey).unwrap();
         builder
             .set_not_before(openssl::asn1::Asn1Time::days_from_now(0).unwrap().as_ref())
             .unwrap();
         builder
-            .set_not_after(openssl::asn1::Asn1Time::days_from_now(365).unwrap().as_ref())
+            .set_not_after(
+                openssl::asn1::Asn1Time::days_from_now(365)
+                    .unwrap()
+                    .as_ref(),
+            )
             .unwrap();
-        builder.sign(&pkey, openssl::hash::MessageDigest::sha256()).unwrap();
+        builder
+            .sign(&pkey, openssl::hash::MessageDigest::sha256())
+            .unwrap();
         let cert = builder.build();
 
         let cert_path = dir.path().join("cert.pem");

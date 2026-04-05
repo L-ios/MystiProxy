@@ -93,7 +93,7 @@ impl MockRepository for InMemoryMockRepository {
         // Apply pagination
         let offset = filter.offset() as usize;
         let limit = filter.limit() as usize;
-        
+
         Ok(result.into_iter().skip(offset).take(limit).collect())
     }
 
@@ -106,7 +106,10 @@ impl MockRepository for InMemoryMockRepository {
     async fn delete(&self, id: Uuid) -> Result<(), ApiError> {
         let mut configs = self.configs.write().await;
         if configs.remove(&id).is_none() {
-            return Err(ApiError::NotFound(format!("Mock configuration with id {} not found", id)));
+            return Err(ApiError::NotFound(format!(
+                "Mock configuration with id {} not found",
+                id
+            )));
         }
         Ok(())
     }
@@ -146,12 +149,12 @@ impl MockRepository for InMemoryMockRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{MatchingRules, ResponseConfig, HttpMethod};
+    use crate::models::{HttpMethod, MatchingRules, ResponseConfig};
 
     #[tokio::test]
     async fn test_in_memory_repository_crud() {
         let repo = InMemoryMockRepository::new();
-        
+
         let config = MockConfiguration::new(
             "Test Mock".to_string(),
             "/api/test".to_string(),
@@ -159,25 +162,25 @@ mod tests {
             MatchingRules::default(),
             ResponseConfig::default(),
         );
-        
+
         let id = config.id;
-        
+
         // Create
         repo.save(&config).await.unwrap();
-        
+
         // Read
         let found = repo.find_by_id(id).await.unwrap();
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "Test Mock");
-        
+
         // Update
         let mut updated = config.clone();
         updated.name = "Updated Mock".to_string();
         repo.save(&updated).await.unwrap();
-        
+
         let found = repo.find_by_id(id).await.unwrap().unwrap();
         assert_eq!(found.name, "Updated Mock");
-        
+
         // Delete
         repo.delete(id).await.unwrap();
         let found = repo.find_by_id(id).await.unwrap();
@@ -187,7 +190,7 @@ mod tests {
     #[tokio::test]
     async fn test_in_memory_repository_filter() {
         let repo = InMemoryMockRepository::new();
-        
+
         let config1 = MockConfiguration::new(
             "Mock 1".to_string(),
             "/api/users".to_string(),
@@ -195,7 +198,7 @@ mod tests {
             MatchingRules::default(),
             ResponseConfig::default(),
         );
-        
+
         let config2 = MockConfiguration::new(
             "Mock 2".to_string(),
             "/api/posts".to_string(),
@@ -203,15 +206,15 @@ mod tests {
             MatchingRules::default(),
             ResponseConfig::default(),
         );
-        
+
         repo.save(&config1).await.unwrap();
         repo.save(&config2).await.unwrap();
-        
+
         let filter = MockFilter {
             method: Some(HttpMethod::Get),
             ..Default::default()
         };
-        
+
         let results = repo.find_all(filter).await.unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "Mock 1");

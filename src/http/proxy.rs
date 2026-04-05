@@ -292,7 +292,7 @@ impl HttpProxyService {
                 .unwrap());
         }
 
-        let target_addr = format!("{}:{}", host, port);
+        let target_addr = format!("{host}:{port}");
 
         let target_stream = tokio::time::timeout(
             config.connect_timeout,
@@ -300,7 +300,7 @@ impl HttpProxyService {
         )
         .await
         .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {}: {}", target_addr, e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {target_addr}: {e}")))?;
 
         let io = TokioIo::new(target_stream);
 
@@ -309,7 +309,7 @@ impl HttpProxyService {
             .title_case_headers(true)
             .handshake(io)
             .await
-            .map_err(|e| MystiProxyError::Proxy(format!("Handshake failed: {}", e)))?;
+            .map_err(|e| MystiProxyError::Proxy(format!("Handshake failed: {e}")))?;
 
         tokio::spawn(async move {
             if let Err(err) = conn.await {
@@ -336,7 +336,7 @@ impl HttpProxyService {
 
         let new_request = new_request
             .body(req.into_body())
-            .map_err(|e| MystiProxyError::Http(e))?;
+            .map_err(MystiProxyError::Http)?;
 
         let response = tokio::time::timeout(
             config.request_timeout,
@@ -344,7 +344,7 @@ impl HttpProxyService {
         )
         .await
         .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {}", e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {e}")))?;
 
         let (parts, body) = response.into_parts();
         let body_bytes = body
@@ -534,7 +534,7 @@ impl HttpProxyAcceptor {
         let target_addr = if target_host.contains(':') {
             target_host.to_string()
         } else {
-            format!("{}:443", target_host)
+            format!("{target_host}:443")
         };
 
         let mut target_stream = tokio::time::timeout(
@@ -543,7 +543,7 @@ impl HttpProxyAcceptor {
         )
         .await
         .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {}: {}", target_addr, e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {target_addr}: {e}")))?;
 
         log_debug!("Connected to {}", target_addr);
 
@@ -640,7 +640,7 @@ mod tests {
 
         let mut headers = hyper::header::HeaderMap::new();
         let credentials = BASE64.encode("test:pass");
-        headers.insert("Proxy-Authorization", format!("Basic {}", credentials).parse().unwrap());
+        headers.insert("Proxy-Authorization", format!("Basic {credentials}").parse().unwrap());
 
         let result = config.authenticate(&headers);
         assert!(result.is_some());
@@ -655,7 +655,7 @@ mod tests {
 
         let mut headers = hyper::header::HeaderMap::new();
         let credentials = BASE64.encode("test:wrong");
-        headers.insert("Proxy-Authorization", format!("Basic {}", credentials).parse().unwrap());
+        headers.insert("Proxy-Authorization", format!("Basic {credentials}").parse().unwrap());
 
         let result = config.authenticate(&headers);
         assert!(result.is_none());

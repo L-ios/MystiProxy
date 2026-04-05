@@ -90,7 +90,11 @@ impl WebSocketBroadcaster {
     pub async fn send_to_client(&self, instance_id: &Uuid, message: &str) -> bool {
         let clients = self.clients.read().await;
         if let Some(client) = clients.get(instance_id) {
-            client.tx.send(Message::Text(message.to_string())).await.is_ok()
+            client
+                .tx
+                .send(Message::Text(message.to_string()))
+                .await
+                .is_ok()
         } else {
             false
         }
@@ -103,7 +107,12 @@ impl WebSocketBroadcaster {
         let mut failed = Vec::new();
 
         for (id, client) in clients.iter() {
-            if client.tx.send(Message::Text(message.to_string())).await.is_err() {
+            if client
+                .tx
+                .send(Message::Text(message.to_string()))
+                .await
+                .is_err()
+            {
                 failed.push(*id);
             }
         }
@@ -148,7 +157,9 @@ async fn handle_socket(socket: WebSocket, _pool: PgPool, broadcaster: Arc<WebSoc
     let (outgoing_tx, mut outgoing_rx) = tokio::sync::mpsc::channel::<Message>(32);
 
     // Register the client
-    broadcaster.add_client(instance_id, outgoing_tx.clone()).await;
+    broadcaster
+        .add_client(instance_id, outgoing_tx.clone())
+        .await;
 
     // Send welcome message
     let welcome = json!({
@@ -156,7 +167,9 @@ async fn handle_socket(socket: WebSocket, _pool: PgPool, broadcaster: Arc<WebSoc
         "instance_id": instance_id,
         "server_time": chrono::Utc::now().to_rfc3339()
     });
-    let _ = tx.send(Message::Text(serde_json::to_string(&welcome).unwrap())).await;
+    let _ = tx
+        .send(Message::Text(serde_json::to_string(&welcome).unwrap()))
+        .await;
 
     // Spawn a task to handle outgoing messages
     let broadcast_clone = broadcaster.clone();
@@ -212,7 +225,9 @@ async fn handle_incoming_message(
                 "type": "heartbeat_ack",
                 "server_time": chrono::Utc::now().to_rfc3339()
             });
-            broadcaster.send_to_client(&instance_id, &serde_json::to_string(&response).unwrap()).await;
+            broadcaster
+                .send_to_client(&instance_id, &serde_json::to_string(&response).unwrap())
+                .await;
         }
         "sync_request" => {
             // Handle sync request
@@ -220,7 +235,9 @@ async fn handle_incoming_message(
                 "type": "sync_required",
                 "message": "Please use REST API for full sync"
             });
-            broadcaster.send_to_client(&instance_id, &serde_json::to_string(&response).unwrap()).await;
+            broadcaster
+                .send_to_client(&instance_id, &serde_json::to_string(&response).unwrap())
+                .await;
         }
         _ => {
             tracing::warn!("Unknown WebSocket message type: {}", msg_type);

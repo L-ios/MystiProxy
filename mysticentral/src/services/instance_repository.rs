@@ -85,10 +85,8 @@ impl InstanceRepository for PostgresInstanceRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        let instances: Result<Vec<MystiProxyInstance>, _> = rows
-            .into_iter()
-            .map(|r| r.into_instance())
-            .collect();
+        let instances: Result<Vec<MystiProxyInstance>, _> =
+            rows.into_iter().map(|r| r.into_instance()).collect();
 
         Ok(instances?)
     }
@@ -196,7 +194,9 @@ struct InstanceRow {
 
 impl InstanceRow {
     fn into_instance(self) -> Result<MystiProxyInstance, ApiError> {
-        let sync_status = self.sync_status.parse::<SyncStatus>()
+        let sync_status = self
+            .sync_status
+            .parse::<SyncStatus>()
             .map_err(|e| ApiError::Internal(anyhow::anyhow!("Invalid sync status: {}", e)))?;
 
         Ok(MystiProxyInstance {

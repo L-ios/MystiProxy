@@ -135,7 +135,7 @@ impl StaticFileService {
         let canonical_root = self.config.root.canonicalize().map_err(|e| {
             MystiProxyError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                format!("Root directory not found: {}", e),
+                format!("Root directory not found: {e}"),
             ))
         })?;
 
@@ -257,7 +257,7 @@ impl StaticFileService {
                 .header(header::CONTENT_LENGTH, content_length)
                 .header(
                     header::CONTENT_RANGE,
-                    format!("bytes {}-{}/{}", start, end, file_size),
+                    format!("bytes {start}-{end}/{file_size}"),
                 )
                 .header(header::ACCEPT_RANGES, "bytes")
                 .body(Self::full_body(Bytes::from(content)))
@@ -278,9 +278,9 @@ impl StaticFileService {
 
         html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
         html.push_str("<meta charset=\"utf-8\">\n");
-        html.push_str(&format!("<title>Index of {}</title>\n", uri));
+        html.push_str(&format!("<title>Index of {uri}</title>\n"));
         html.push_str("</head>\n<body>\n");
-        html.push_str(&format!("<h1>Index of {}</h1>\n", uri));
+        html.push_str(&format!("<h1>Index of {uri}</h1>\n"));
         html.push_str("<hr>\n<ul>\n");
 
         // 添加父目录链接
@@ -309,12 +309,12 @@ impl StaticFileService {
 
         // 添加目录
         for dir in dirs {
-            html.push_str(&format!("<li><a href=\"{}/\">{}/</a></li>\n", dir, dir));
+            html.push_str(&format!("<li><a href=\"{dir}/\">{dir}/</a></li>\n"));
         }
 
         // 添加文件
         for file in files {
-            html.push_str(&format!("<li><a href=\"{}\">{}</a></li>\n", file, file));
+            html.push_str(&format!("<li><a href=\"{file}\">{file}</a></li>\n"));
         }
 
         html.push_str("</ul>\n<hr>\n</body>\n</html>");

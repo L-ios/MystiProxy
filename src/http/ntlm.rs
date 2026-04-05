@@ -153,7 +153,7 @@ impl NtlmAuthenticator {
     pub fn parse_type2_message(&self, message: &str) -> Result<Type2Message> {
         let decoded = BASE64
             .decode(message.trim_start_matches("NTLM "))
-            .map_err(|e| MystiProxyError::Proxy(format!("Invalid NTLM Type2 message: {}", e)))?;
+            .map_err(|e| MystiProxyError::Proxy(format!("Invalid NTLM Type2 message: {e}")))?;
 
         if decoded.len() < 48 {
             return Err(MystiProxyError::Proxy("NTLM Type2 message too short".to_string()));
@@ -167,7 +167,7 @@ impl NtlmAuthenticator {
         // Verify message type (2)
         let msg_type = u32::from_le_bytes([decoded[8], decoded[9], decoded[10], decoded[11]]);
         if msg_type != 2 {
-            return Err(MystiProxyError::Proxy(format!("Expected Type 2, got {}", msg_type)));
+            return Err(MystiProxyError::Proxy(format!("Expected Type 2, got {msg_type}")));
         }
 
         // Extract challenge
@@ -319,7 +319,7 @@ impl NtlmAuthenticator {
     pub fn authenticate(&self, type2_message: &str) -> Result<String> {
         let type2 = self.parse_type2_message(type2_message)?;
         let type3 = self.create_type3_message(&type2);
-        Ok(format!("NTLM {}", type3))
+        Ok(format!("NTLM {type3}"))
     }
 }
 
@@ -415,12 +415,9 @@ fn compute_ntlm_response_v2(
     thread_rng().fill_bytes(&mut client_challenge);
     let timestamp = get_ntlm_timestamp();
 
-    // Build NTLMv2 blob
-    let mut blob = Vec::new();
-    blob.push(0x01); // Blob signature
-    blob.push(0x01);
-    blob.push(0x00);
-    blob.push(0x00);
+    let mut blob = vec![
+        0x01, 0x01, 0x00, 0x00, // Blob signature and reserved
+    ];
 
     blob.extend_from_slice(&[0u8; 4]); // Reserved
 
@@ -485,10 +482,7 @@ fn get_ntlm_timestamp() -> [u8; 8] {
 /// 创建 DES 密钥 (添加奇偶校验位)
 fn create_des_key(key: &[u8]) -> [u8; 8] {
     let mut des_key = [0u8; 8];
-    for i in 0..7 {
-        des_key[i] = key[i];
-    }
-    des_key[7] = 0;
+    des_key[..7].copy_from_slice(&key[..7]);
     des_key
 }
 

@@ -67,9 +67,9 @@ pub enum SocketAddr {
 impl Display for SocketAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Tcp(addr) => write!(f, "tcp://{}", addr),
+            Self::Tcp(addr) => write!(f, "tcp://{addr}"),
             #[cfg(unix)]
-            Self::Uds(addr) => write!(f, "unix://{:?}", addr),
+            Self::Uds(addr) => write!(f, "unix://{addr:?}"),
         }
     }
 }

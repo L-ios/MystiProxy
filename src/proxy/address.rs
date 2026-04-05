@@ -39,16 +39,14 @@ impl Address {
     pub fn parse(s: &str) -> Result<Self> {
         if !s.contains("://") {
             return Err(MystiProxyError::Other(format!(
-                "Invalid address format: missing protocol separator '://': {}",
-                s
+                "Invalid address format: missing protocol separator '://': {s}"
             )));
         }
 
         let parts: Vec<&str> = s.splitn(2, "://").collect();
         if parts.len() != 2 {
             return Err(MystiProxyError::Other(format!(
-                "Invalid address format: {}",
-                s
+                "Invalid address format: {s}"
             )));
         }
 
@@ -71,8 +69,7 @@ impl Address {
                 ))
             }
             _ => Err(MystiProxyError::Other(format!(
-                "Unsupported protocol: {}",
-                protocol
+                "Unsupported protocol: {protocol}"
             ))),
         }
     }
@@ -119,7 +116,7 @@ impl Address {
 impl std::fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Address::Tcp(addr) => write!(f, "tcp://{}", addr),
+            Address::Tcp(addr) => write!(f, "tcp://{addr}"),
             #[cfg(unix)]
             Address::Unix(path) => write!(f, "unix://{}", path.display()),
         }

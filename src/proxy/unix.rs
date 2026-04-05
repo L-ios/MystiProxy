@@ -37,7 +37,7 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
     // 如果文件已存在，先删除
     if path.exists() {
         std::fs::remove_file(path).map_err(|e| {
-            MystiProxyError::Proxy(format!("无法删除已存在的 socket 文件 {:?}: {}", path, e))
+            MystiProxyError::Proxy(format!("无法删除已存在的 socket 文件 {path:?}: {e}"))
         })?;
     }
 
@@ -45,14 +45,14 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                MystiProxyError::Proxy(format!("无法创建 socket 父目录 {:?}: {}", parent, e))
+                MystiProxyError::Proxy(format!("无法创建 socket 父目录 {parent:?}: {e}"))
             })?;
         }
     }
 
     // 绑定 Unix Domain Socket
     UnixListener::bind(path).map_err(|e| {
-        MystiProxyError::Proxy(format!("无法绑定 Unix Domain Socket {:?}: {}", path, e))
+        MystiProxyError::Proxy(format!("无法绑定 Unix Domain Socket {path:?}: {e}"))
     })
 }
 
@@ -80,7 +80,7 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
 /// ```
 pub async fn connect_unix(path: &Path) -> Result<UnixStream> {
     UnixStream::connect(path).await.map_err(|e| {
-        MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {:?}: {}", path, e))
+        MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {path:?}: {e}"))
     })
 }
 
@@ -118,7 +118,7 @@ pub async fn forward_uds_to_tcp(mut uds_stream: UnixStream, tcp_addr: &str) -> R
     // 连接到 TCP 目标
     let mut tcp_stream = TcpStream::connect(tcp_addr)
         .await
-        .map_err(|e| MystiProxyError::Proxy(format!("无法连接到 TCP 目标 {}: {}", tcp_addr, e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("无法连接到 TCP 目标 {tcp_addr}: {e}")))?;
 
     // 双向转发
     let (mut uds_read, mut uds_write) = uds_stream.split();
@@ -139,7 +139,7 @@ pub async fn forward_uds_to_tcp(mut uds_stream: UnixStream, tcp_addr: &str) -> R
 
     // 并发执行两个方向的转发
     let (bytes_uds_to_tcp, bytes_tcp_to_uds) = tokio::try_join!(uds_to_tcp, tcp_to_uds)
-        .map_err(|e| MystiProxyError::Proxy(format!("转发过程中发生错误: {}", e)))?;
+        .map_err(|e| MystiProxyError::Proxy(format!("转发过程中发生错误: {e}")))?;
 
     Ok((bytes_uds_to_tcp, bytes_tcp_to_uds))
 }
@@ -201,7 +201,7 @@ pub async fn forward_uds_to_uds(
     // 并发执行两个方向的转发
     let (bytes_client_to_target, bytes_target_to_client) =
         tokio::try_join!(client_to_target, target_to_client)
-            .map_err(|e| MystiProxyError::Proxy(format!("转发过程中发生错误: {}", e)))?;
+            .map_err(|e| MystiProxyError::Proxy(format!("转发过程中发生错误: {e}")))?;
 
     Ok((bytes_client_to_target, bytes_target_to_client))
 }

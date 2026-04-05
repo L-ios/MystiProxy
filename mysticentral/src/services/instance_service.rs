@@ -7,7 +7,9 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::error::{ApiError, ApiResult};
-use crate::models::{HeartbeatRequest, InstanceFilter, InstanceRegisterRequest, MystiProxyInstance};
+use crate::models::{
+    HeartbeatRequest, InstanceFilter, InstanceRegisterRequest, MystiProxyInstance,
+};
 use crate::services::InstanceRepository;
 
 /// Service for managing MystiProxy instances
@@ -22,15 +24,22 @@ impl<R: InstanceRepository> InstanceService<R> {
     }
 
     /// Register a new instance
-    pub async fn register(&self, request: InstanceRegisterRequest) -> ApiResult<MystiProxyInstance> {
+    pub async fn register(
+        &self,
+        request: InstanceRegisterRequest,
+    ) -> ApiResult<MystiProxyInstance> {
         // Validate name
         if request.name.trim().is_empty() {
-            return Err(ApiError::Validation("Instance name cannot be empty".to_string()));
+            return Err(ApiError::Validation(
+                "Instance name cannot be empty".to_string(),
+            ));
         }
 
         // Validate endpoint URL
         if request.endpoint_url.trim().is_empty() {
-            return Err(ApiError::Validation("Endpoint URL cannot be empty".to_string()));
+            return Err(ApiError::Validation(
+                "Endpoint URL cannot be empty".to_string(),
+            ));
         }
 
         // Check for duplicate name
@@ -150,7 +159,10 @@ mod tests {
             Ok(instances.get(&id).cloned())
         }
 
-        async fn find_all(&self, filter: InstanceFilter) -> Result<Vec<MystiProxyInstance>, ApiError> {
+        async fn find_all(
+            &self,
+            filter: InstanceFilter,
+        ) -> Result<Vec<MystiProxyInstance>, ApiError> {
             let instances = self.instances.read().await;
             let result: Vec<MystiProxyInstance> = instances
                 .values()
@@ -169,7 +181,10 @@ mod tests {
         async fn delete(&self, id: Uuid) -> Result<(), ApiError> {
             let mut instances = self.instances.write().await;
             if instances.remove(&id).is_none() {
-                return Err(ApiError::NotFound(format!("Instance with id {} not found", id)));
+                return Err(ApiError::NotFound(format!(
+                    "Instance with id {} not found",
+                    id
+                )));
             }
             Ok(())
         }

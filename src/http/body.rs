@@ -175,7 +175,7 @@ impl BodyTransformer {
                     obj.insert(field.to_string(), Value::Array(Vec::new()));
                 }
                 current = obj.get_mut(field).ok_or_else(|| {
-                    MystiProxyError::JsonPath(format!("Field '{}' not found", field))
+                    MystiProxyError::JsonPath(format!("Field '{field}' not found"))
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
@@ -188,7 +188,7 @@ impl BodyTransformer {
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
-                    MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
+                    MystiProxyError::JsonPath(format!("Invalid array index: {idx_str}"))
                 })?;
 
                 if let Some(arr) = current.as_array_mut() {
@@ -196,8 +196,7 @@ impl BodyTransformer {
                         current = &mut arr[idx];
                     } else {
                         return Err(MystiProxyError::JsonPath(format!(
-                            "Array index {} out of bounds",
-                            idx
+                            "Array index {idx} out of bounds"
                         )));
                     }
                 } else {
@@ -231,7 +230,7 @@ impl BodyTransformer {
                     obj.insert(field.to_string(), Value::Array(Vec::new()));
                 }
                 current = obj.get_mut(field).ok_or_else(|| {
-                    MystiProxyError::JsonPath(format!("Field '{}' not found", field))
+                    MystiProxyError::JsonPath(format!("Field '{field}' not found"))
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
@@ -244,7 +243,7 @@ impl BodyTransformer {
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
-                    MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
+                    MystiProxyError::JsonPath(format!("Invalid array index: {idx_str}"))
                 })?;
 
                 if let Some(arr) = current.as_array_mut() {
@@ -252,8 +251,7 @@ impl BodyTransformer {
                         current = &mut arr[idx];
                     } else {
                         return Err(MystiProxyError::JsonPath(format!(
-                            "Array index {} out of bounds",
-                            idx
+                            "Array index {idx} out of bounds"
                         )));
                     }
                 } else {
@@ -310,7 +308,7 @@ impl BodyTransformer {
                 current = Self::navigate_array(current, part)?;
             } else if let Some(obj) = current.as_object_mut() {
                 current = obj.get_mut(*part).ok_or_else(|| {
-                    MystiProxyError::JsonPath(format!("Field '{}' not found", part))
+                    MystiProxyError::JsonPath(format!("Field '{part}' not found"))
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
@@ -340,7 +338,7 @@ impl BodyTransformer {
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
                 current = obj.get_mut(field).ok_or_else(|| {
-                    MystiProxyError::JsonPath(format!("Field '{}' not found", field))
+                    MystiProxyError::JsonPath(format!("Field '{field}' not found"))
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
@@ -353,7 +351,7 @@ impl BodyTransformer {
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
-                    MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
+                    MystiProxyError::JsonPath(format!("Invalid array index: {idx_str}"))
                 })?;
 
                 if let Some(arr) = current.as_array_mut() {
@@ -361,8 +359,7 @@ impl BodyTransformer {
                         current = &mut arr[idx];
                     } else {
                         return Err(MystiProxyError::JsonPath(format!(
-                            "Array index {} out of bounds",
-                            idx
+                            "Array index {idx} out of bounds"
                         )));
                     }
                 } else {
@@ -387,7 +384,7 @@ impl BodyTransformer {
         if !field.is_empty() {
             if let Some(obj) = current.as_object_mut() {
                 current = obj.get_mut(field).ok_or_else(|| {
-                    MystiProxyError::JsonPath(format!("Field '{}' not found", field))
+                    MystiProxyError::JsonPath(format!("Field '{field}' not found"))
                 })?;
             } else {
                 return Err(MystiProxyError::JsonPath(
@@ -400,7 +397,7 @@ impl BodyTransformer {
         for idx_part in idx_parts.iter().skip(1) {
             if let Some(idx_str) = idx_part.strip_suffix(']') {
                 let idx: usize = idx_str.parse().map_err(|_| {
-                    MystiProxyError::JsonPath(format!("Invalid array index: {}", idx_str))
+                    MystiProxyError::JsonPath(format!("Invalid array index: {idx_str}"))
                 })?;
 
                 if let Some(arr) = current.as_array_mut() {

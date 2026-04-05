@@ -90,11 +90,7 @@ impl ConflictService {
     #[allow(dead_code)]
     pub async fn list_unresolved(&self) -> Vec<StoredConflict> {
         let store = self.store.read().await;
-        store
-            .values()
-            .filter(|c| !c.resolved)
-            .cloned()
-            .collect()
+        store.values().filter(|c| !c.resolved).cloned().collect()
     }
 
     /// List all conflicts
@@ -119,7 +115,9 @@ impl ConflictService {
             .ok_or_else(|| ApiError::NotFound(format!("Conflict {} not found", id)))?;
 
         if conflict.resolved {
-            return Err(ApiError::BadRequest("Conflict already resolved".to_string()));
+            return Err(ApiError::BadRequest(
+                "Conflict already resolved".to_string(),
+            ));
         }
 
         let resolved_config = match resolution {
@@ -129,11 +127,11 @@ impl ConflictService {
                 config.version_vector.increment(Uuid::new_v4());
                 config
             }
-            ConflictResolution::Merge => {
-                merged_config.ok_or_else(|| {
-                    ApiError::BadRequest("Merged configuration required for merge resolution".to_string())
-                })?
-            }
+            ConflictResolution::Merge => merged_config.ok_or_else(|| {
+                ApiError::BadRequest(
+                    "Merged configuration required for merge resolution".to_string(),
+                )
+            })?,
         };
 
         conflict.resolved = true;
@@ -168,9 +166,7 @@ impl ConflictService {
         let mut store = self.store.write().await;
         let initial_len = store.len();
 
-        store.retain(|_, c| {
-            !c.resolved || c.resolved_at.map_or(true, |t| t > older_than)
-        });
+        store.retain(|_, c| !c.resolved || c.resolved_at.map_or(true, |t| t > older_than));
 
         initial_len - store.len()
     }
