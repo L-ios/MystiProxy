@@ -1,4 +1,4 @@
-name: Rust
+name: Build and Release
 
 on:
   push:
@@ -6,15 +6,18 @@ on:
       - main
       - '*'
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
+  NODE_VERSION: '20'
 
 jobs:
-  build-and-archive:
+  mystiproxy:
+    name: MystiProxy (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
@@ -23,60 +26,199 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
-#          - os: ubuntu-24.04
-#            target: wasm32-unknown-emscripten
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
+
       - name: Get Git Commit ID
         id: git_commit
         run: echo "GIT_COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
       - name: Install Rust toolchain
         run: rustup target add ${{ matrix.target }}
+
       - name: Install build dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config upx
+
       - name: Install musl-tools (if needed)
         if: matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - name: Install Emscripten (if needed)
-        if: matrix.target == 'wasm32-unknown-emscripten'
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
-          source ./emsdk_env.sh
-          echo "EMSDK_PATH=$(pwd)" >> $GITHUB_ENV
-          echo "EMSDK_ENV=$(pwd)/emsdk_env.sh" >> $GITHUB_ENV
-      - name: Source Emscripten environment (if needed)
-        if: matrix.target == 'wasm32-unknown-emscripten'
-        run: source ${{ env.EMSDK_ENV }}
+        run: sudo apt-get install -y musl-tools
+
       - name: Build Release
-        run: cargo build --release --all --target ${{ matrix.target }}
+        run: cargo build --release -p mystiproxy --target ${{ matrix.target }}
+
       - name: Strip Binary (Linux only)
         if: runner.os == 'Linux'
         run: |
-          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec strip {} \;
-          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -exec upx --best {} \;
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -name 'mystiproxy*' -exec strip {} \;
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -name 'mystiproxy*' -exec upx --best {} \;
+
       - name: Archive Release Build (Linux)
         if: runner.os == 'Linux'
         run: |
           cd target/${{ matrix.target }}/release
-          zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip $(find . -maxdepth 1 -type f -executable)
+          mkdir -p mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}
+          cp mystiproxy mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}/
+          zip -r mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}/
 
       - name: Archive Release Build (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
-          Compress-Archive -Path mystiproxy.exe -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+          mkdir -p mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}
+          cp mystiproxy.exe mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}/
+          Compress-Archive -Path mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }} -DestinationPath mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+          name: mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}
           path: target/${{ matrix.target }}/release/mystiproxy-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+
+  mysticentral:
+    name: MystiCentral (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Git Commit ID
+        id: git_commit
+        run: echo "GIT_COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Install Rust toolchain
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config upx
+
+      - name: Build Release
+        run: cargo build --release -p mysticentral --target ${{ matrix.target }}
+
+      - name: Strip Binary
+        run: |
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -name 'mysticentral*' -exec strip {} \;
+          find target/${{ matrix.target }}/release -maxdepth 1 -type f -executable -name 'mysticentral*' -exec upx --best {} \;
+
+      - name: Archive Release Build
+        run: |
+          cd target/${{ matrix.target }}/release
+          mkdir -p mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}
+          cp mysticentral mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}/
+          zip -r mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}/
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}
+          path: target/${{ matrix.target }}/release/mysticentral-${{ matrix.target }}-${{ env.GIT_COMMIT_ID }}.zip
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Git Commit ID
+        id: git_commit
+        run: echo "GIT_COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+
+      - name: Create archive
+        run: |
+          cd frontend/dist
+          zip -r frontend-${{ env.GIT_COMMIT_ID }}.zip .
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-${{ env.GIT_COMMIT_ID }}
+          path: frontend/dist/frontend-${{ env.GIT_COMMIT_ID }}.zip
+
+  docker:
+    name: Docker Images
+    runs-on: ubuntu-24.04
+    needs: [mystiproxy, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Git Commit ID
+        id: git_commit
+        run: echo "GIT_COMMIT_ID=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Download mystiproxy artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mystiproxy-x86_64-unknown-linux-musl-${{ env.GIT_COMMIT_ID }}
+          path: container/
+
+      - name: Extract mystiproxy
+        run: |
+          cd container
+          unzip -o mystiproxy-*.zip
+          mv mystiproxy-*/mystiproxy ./mystiproxy
+          chmod +x mystiproxy
+
+      - name: Build and push mystiproxy image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./container
+          file: ./container/Dockerfile.mystiproxy
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mystiproxy:latest
+            ghcr.io/${{ github.repository_owner }}/mystiproxy:${{ env.GIT_COMMIT_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-${{ env.GIT_COMMIT_ID }}
+          path: frontend/dist/
+
+      - name: Build and push mysticentral image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mysticentral
+          file: ./mysticentral/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mysticentral:latest
+            ghcr.io/${{ github.repository_owner }}/mysticentral:${{ env.GIT_COMMIT_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
