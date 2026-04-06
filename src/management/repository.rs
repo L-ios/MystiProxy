@@ -46,6 +46,15 @@ pub trait MockRepository: Send + Sync {
 
     /// Get configurations modified since a given timestamp
     async fn find_modified_since(&self, since: DateTime<Utc>) -> Result<Vec<MockConfiguration>>;
+
+    /// Batch create mock configurations
+    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>>;
+
+    /// Batch update mock configurations
+    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>>;
+
+    /// Batch delete mock configurations
+    async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64>;
 }
 
 /// SQLite implementation of MockRepository
@@ -327,6 +336,41 @@ impl MockRepository for LocalMockRepository {
             .map(|row| Self::row_to_config(row))
             .collect()
     }
+
+    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>> {
+        let mut configs = Vec::with_capacity(requests.len());
+        
+        for request in requests {
+            let config = self.create(request).await?;
+            configs.push(config);
+        }
+        
+        Ok(configs)
+    }
+
+    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>> {
+        let mut configs = Vec::with_capacity(updates.len());
+        
+        for (id, request) in updates {
+            let config = self.update(id, request).await?;
+            configs.push(config);
+        }
+        
+        Ok(configs)
+    }
+
+    async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64> {
+        let mut count = 0;
+        
+        for id in ids {
+            let deleted = self.delete(id).await?;
+            if deleted {
+                count += 1;
+            }
+        }
+        
+        Ok(count)
+    }
 }
 
 impl LocalMockRepository {
@@ -484,6 +528,74 @@ impl MockRepository for InMemoryMockRepository {
             .collect();
         result.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
         Ok(result)
+    }
+
+    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>> {
+        let mut configs = Vec::with_capacity(requests.len());
+        let mut write_guard = self.configs.write().unwrap();
+        
+        for request in requests {
+            let mut config = MockConfiguration::new(
+                request.name,
+                request.path,
+                request.method,
+                request.matching_rules,
+                request.response_config,
+            );
+            config.is_active = request.is_active;
+            config.touch(self.instance_id);
+            
+            write_guard.insert(config.id, config.clone());
+            configs.push(config);
+        }
+        
+        Ok(configs)
+    }
+
+    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>> {
+        let mut configs = Vec::with_capacity(updates.len());
+        let mut write_guard = self.configs.write().unwrap();
+        
+        for (id, request) in updates {
+            if let Some(mut config) = write_guard.get_mut(&id) {
+                if let Some(name) = request.name {
+                    config.name = name;
+                }
+                if let Some(path) = request.path {
+                    config.path = path;
+                }
+                if let Some(method) = request.method {
+                    config.method = method;
+                }
+                if let Some(matching_rules) = request.matching_rules {
+                    config.matching_rules = matching_rules;
+                }
+                if let Some(response_config) = request.response_config {
+                    config.response_config = response_config;
+                }
+                if let Some(is_active) = request.is_active {
+                    config.is_active = is_active;
+                }
+                
+                config.touch(self.instance_id);
+                configs.push(config.clone());
+            }
+        }
+        
+        Ok(configs)
+    }
+
+    async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64> {
+        let mut count = 0;
+        let mut write_guard = self.configs.write().unwrap();
+        
+        for id in ids {
+            if write_guard.remove(&id).is_some() {
+                count += 1;
+            }
+        }
+        
+        Ok(count)
     }
 }
 

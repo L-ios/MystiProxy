@@ -1,8 +1,10 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use clap::Parser;
 use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
 use mystiproxy::http::{create_handler, HttpServer, HttpServerConfig};
+use mystiproxy::metrics::MetricsManager;
 use mystiproxy::proxy::ProxyServer;
 use mystiproxy::{set_engine_name, thread_identity, Result};
 use std::collections::HashMap;
@@ -73,6 +75,14 @@ async fn main() -> Result<()> {
         .event_format(CustomFormatter)
         .init();
 
+    // 初始化监控指标
+    let mut metrics_manager = MetricsManager::new();
+    metrics_manager.init();
+
+    // 启动指标导出服务器
+    let metrics_addr: SocketAddr = "127.0.0.1:9090".parse().unwrap();
+    metrics_manager.start_server(metrics_addr).await;
+
     tracing::info!("MystiProxy 启动中...");
 
     let config = load_config(&args)?;
@@ -123,13 +133,31 @@ async fn main() -> Result<()> {
                     }
                 };
 
-                let mut server = HttpServer::new(
-                    HttpServerConfig::new(
-                        engine_config.listen.clone(),
-                        engine_config.request_timeout,
-                    ),
-                    handler,
-                );
+                let mut server = if let Some(tls_config) = &engine_config.tls {
+                    match HttpServer::new_with_tls(
+                        HttpServerConfig::new(
+                            engine_config.listen.clone(),
+                            engine_config.request_timeout,
+                        ),
+                        handler,
+                        tls_config,
+                    ) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("创建 HTTPS 服务器 '{}' 失败: {}", name_clone, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    HttpServer::new(
+                        HttpServerConfig::new(
+                            engine_config.listen.clone(),
+                            engine_config.request_timeout,
+                        ),
+                        handler,
+                        None,
+                    )
+                };
 
                 if let Err(e) = server.start().await {
                     error!("HTTP 引擎 '{}' 启动失败: {}", name_clone, e);
@@ -137,10 +165,11 @@ async fn main() -> Result<()> {
                 }
 
                 info!(
-                    "HTTP 引擎 '{}' 已启动: {} -> {} (HTTP)",
+                    "HTTP 引擎 '{}' 已启动: {} -> {} ({})",
                     name_clone,
                     server.listen_addr(),
                     engine_config.target,
+                    if engine_config.tls.is_some() { "HTTPS" } else { "HTTP" }
                 );
 
                 let engine_name = name_clone.clone();
@@ -199,6 +228,8 @@ fn load_config(args: &MystiArg) -> Result<MystiConfig> {
             connection_timeout: None,
             header: None,
             locations: None,
+            auth: None,
+            tls: None,
         };
 
         let mut engine_map = HashMap::new();

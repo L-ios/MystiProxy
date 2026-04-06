@@ -1,10 +1,11 @@
 //! HTTP 服务器模块
-//!
+//! 
 //! 提供 HTTP 服务器功能，支持 TCP 和 UDS 监听
 
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -14,10 +15,13 @@ use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use tokio::net::TcpStream;
+use tokio_rustls::server::TlsStream;
 use tracing::{error, info, warn};
 
 use crate::error::{MystiProxyError, Result};
 use crate::io::{SocketStream, StreamListener};
+use crate::tls::{TlsConfig as TlsModuleConfig, TlsServer};
 
 /// BoxBody 类型别名
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Infallible>;
@@ -51,6 +55,8 @@ where
     service: S,
     /// 监听器
     listener: Option<StreamListener>,
+    /// TLS 服务器（可选）
+    tls_server: Option<Arc<TlsServer>>,
 }
 
 impl<S> HttpServer<S>
@@ -60,12 +66,41 @@ where
     S::Error: std::error::Error + Send + Sync + 'static,
 {
     /// 创建新的 HTTP 服务器
-    pub fn new(config: HttpServerConfig, service: S) -> Self {
+    pub fn new(config: HttpServerConfig, service: S, tls_server: Option<Arc<TlsServer>>) -> Self {
         Self {
             config,
             service,
             listener: None,
+            tls_server,
         }
+    }
+
+    /// 创建新的 HTTP 服务器（带 TLS 配置）
+    pub fn new_with_tls(config: HttpServerConfig, service: S, tls_config: &crate::config::TlsConfig) -> Result<Self> {
+        let tls_module_config = TlsModuleConfig::from_pem_files(
+            std::path::Path::new(&tls_config.cert_path),
+            std::path::Path::new(&tls_config.key_path)
+        )?;
+
+        let tls_module_config = if tls_config.mutual_auth {
+            if let Some(client_ca_path) = &tls_config.client_ca_path {
+                tls_module_config.with_client_ca(std::path::Path::new(client_ca_path))?
+            } else {
+                return Err(MystiProxyError::Tls("Mutual auth enabled but no client CA path provided".to_string()));
+            }
+        } else {
+            tls_module_config
+        };
+
+        let server_config = if tls_config.mutual_auth {
+            tls_module_config.to_server_config_mutual()?
+        } else {
+            tls_module_config.to_server_config()?
+        };
+
+        let tls_server = Arc::new(TlsServer::new(server_config));
+
+        Ok(Self::new(config, service, Some(tls_server)))
     }
 
     /// 启动服务器
@@ -95,10 +130,11 @@ where
 
                     let service = self.service.clone();
                     let timeout = self.config.timeout;
+                    let tls_server = self.tls_server.clone();
 
                     // 为每个连接创建新任务
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(stream, service, timeout).await {
+                        if let Err(e) = Self::handle_connection(stream, service, timeout, tls_server).await {
                             error!("Connection error: {}", e);
                         }
                     });
@@ -115,9 +151,24 @@ where
         stream: SocketStream,
         service: S,
         timeout: Option<Duration>,
+        tls_server: Option<Arc<TlsServer>>,
     ) -> Result<()> {
-        let io = TokioIo::new(stream);
+        if let Some(tls_server) = tls_server {
+            let tls_stream = tls_server.accept(stream).await?;
+            let io = TokioIo::new(tls_stream);
+            Self::serve_connection(io, service, timeout).await
+        } else {
+            let io = TokioIo::new(stream);
+            Self::serve_connection(io, service, timeout).await
+        }
+    }
 
+    /// 处理连接服务
+    async fn serve_connection(
+        io: impl hyper::rt::Read + hyper::rt::Write + Unpin,
+        service: S,
+        timeout: Option<Duration>,
+    ) -> Result<()> {
         // 创建 HTTP/1.1 服务
         let conn = http1::Builder::new()
             .preserve_header_case(true)
@@ -257,7 +308,7 @@ pub async fn create_simple_server(
 ) -> Result<HttpServer<HttpProxyService>> {
     let config = HttpServerConfig::new(listen, timeout);
     let service = HttpProxyService::new(target, timeout);
-    Ok(HttpServer::new(config, service))
+    Ok(HttpServer::new(config, service, None))
 }
 
 #[cfg(test)]

@@ -233,6 +233,67 @@ pub async fn delete_mock(
     }
 }
 
+/// Batch create mock configurations
+/// 
+/// POST /api/v1/mocks/batch
+pub async fn batch_create_mocks(
+    State(state): State<HandlerState>,
+    Json(requests): Json<Vec<CreateMockRequest>>,
+) -> Result<(StatusCode, Json<ApiResponse<Vec<MockConfiguration>>), ApiError> {
+    // Validate requests
+    for (i, request) in requests.iter().enumerate() {
+        if request.name.is_empty() {
+            return Err(ApiError::Validation(format!("Name is required for request #{}", i)));
+        }
+        if request.path.is_empty() {
+            return Err(ApiError::Validation(format!("Path is required for request #{}", i)));
+        }
+        if !request.path.starts_with('/') {
+            return Err(ApiError::Validation(format!("Path must start with '/' for request #{}", i)));
+        }
+    }
+    
+    let configs = state.repository.batch_create(requests).await?;
+    
+    Ok((StatusCode::CREATED, Json(ApiResponse::success(configs))))
+}
+
+/// Batch update mock configurations
+/// 
+/// PUT /api/v1/mocks/batch
+pub async fn batch_update_mocks(
+    State(state): State<HandlerState>,
+    Json(updates): Json<Vec<(Uuid, UpdateMockRequest)>>,
+) -> Result<Json<ApiResponse<Vec<MockConfiguration>>>, ApiError> {
+    // Validate requests
+    for (i, (_, request)) in updates.iter().enumerate() {
+        if let Some(ref path) = request.path {
+            if path.is_empty() {
+                return Err(ApiError::Validation(format!("Path cannot be empty for request #{}", i)));
+            }
+            if !path.starts_with('/') {
+                return Err(ApiError::Validation(format!("Path must start with '/' for request #{}", i)));
+            }
+        }
+    }
+    
+    let configs = state.repository.batch_update(updates).await?;
+    
+    Ok(Json(ApiResponse::success(configs)))
+}
+
+/// Batch delete mock configurations
+/// 
+/// DELETE /api/v1/mocks/batch
+pub async fn batch_delete_mocks(
+    State(state): State<HandlerState>,
+    Json(ids): Json<Vec<Uuid>>,
+) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
+    let deleted_count = state.repository.batch_delete(ids).await?;
+    
+    Ok(Json(ApiResponse::success(serde_json::json!({"deleted_count": deleted_count}))))
+}
+
 /// Health check endpoint
 /// 
 /// GET /api/v1/health
@@ -330,6 +391,7 @@ pub fn create_management_router(state: HandlerState) -> Router {
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/mocks", get(list_mocks).post(create_mock))
         .route("/api/v1/mocks/:id", get(get_mock).put(update_mock).delete(delete_mock))
+        .route("/api/v1/mocks/batch", post(batch_create_mocks).put(batch_update_mocks).delete(batch_delete_mocks))
         .route("/api/v1/sync/status", get(get_sync_status))
         .route("/api/v1/sync/trigger", post(trigger_sync))
         .with_state(state)

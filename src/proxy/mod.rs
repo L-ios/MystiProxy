@@ -281,6 +281,8 @@ mod tests {
             connection_timeout: None,
             header: None,
             locations: None,
+            auth: None,
+            tls: None,
         };
 
         let proxy_config = ProxyConfig::from_engine_config(&engine_config).unwrap();

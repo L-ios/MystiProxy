@@ -11,6 +11,15 @@ MystiProxy is a flexible HTTP/TCP proxy server with mock support, written in Rus
 - Static file serving
 - TLS support
 - Multiple routing modes (Full, Prefix, Regex, PrefixRegex)
+- HTTP authentication (Header and JWT)
+- WebSocket support
+- HTTP connection pooling
+- Request body JSON transformation using JSONPath
+- Local management module with SQLite storage
+- Performance monitoring with Prometheus metrics
+- NTLM authentication support
+- Upstream proxy configuration
+- Gateway module with URI mapping and transformation
 
 ## Build Commands
 
@@ -257,10 +266,25 @@ pub struct HttpClient {
 ### Project Structure
 - `src/config/` - Configuration parsing and validation
 - `src/http/` - HTTP server, client, handler, and utilities
+  - `src/http/auth.rs` - HTTP authentication
+  - `src/http/body.rs` - Request body transformation
+  - `src/http/client.rs` - HTTP client with connection pooling
+  - `src/http/handler.rs` - HTTP request handler
+  - `src/http/ntlm.rs` - NTLM authentication support
+  - `src/http/proxy.rs` - HTTP proxy functionality
+  - `src/http/server.rs` - HTTP server
+  - `src/http/static_files.rs` - Static file serving
+  - `src/http/upstream.rs` - Upstream proxy configuration
+  - `src/http/websocket.rs` - WebSocket support
 - `src/proxy/` - TCP/Unix socket proxy implementation
 - `src/io/` - Stream and listener abstractions
 - `src/mock/` - Mock response generation
+- `src/management/` - Local management module with SQLite storage
+- `src/router/` - Routing functionality
+- `src/tls/` - TLS support
 - `src/error.rs` - Error types and Result alias
+- `src/gateway.rs` - Gateway module with URI mapping
+- `src/metrics.rs` - Performance monitoring with Prometheus
 - `src/main.rs` - Application entry point
 - `src/lib.rs` - Library root with re-exports
 
@@ -271,6 +295,13 @@ pub struct HttpClient {
 - `tracing` / `tracing-subscriber` - Logging
 - `thiserror` / `anyhow` - Error handling
 - `clap` - CLI argument parsing
+- `prometheus` - Performance monitoring
+- `tokio-tungstenite` / `tungstenite` - WebSocket support
+- `sqlx` - SQLite database support
+- `uuid` - Unique identifier generation
+- `axum` - HTTP framework for management API
+- `rustls` - TLS support
+- `sha1` - WebSocket handshake and NTLM authentication
 
 ## Configuration Files
 - Use YAML format for configuration

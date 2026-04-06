@@ -90,9 +90,21 @@ base64 = "0.22"
 # SHA256 (for password hashing)
 sha2 = "0.10"
 
+# WebSocket support
+tokio-tungstenite = "0.21"
+tungstenite = "0.21"
+
+# Prometheus metrics
+prometheus = "0.13"
+metrics = "0.18"
+metrics-exporter-prometheus = "0.14"
+
 # MD4, MD5 for NTLM authentication
 md4 = "0.10"
 md-5 = "0.10"
+
+# SHA1 for WebSocket
+sha1 = "0.10"
 hmac = "0.12"
 
 # DES for NTLM authentication

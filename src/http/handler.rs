@@ -7,7 +7,7 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty, Full};
@@ -18,7 +18,9 @@ use tracing::{debug, info, warn};
 
 use crate::config::{EngineConfig, HeaderActionType, LocationConfig, ProviderType};
 use crate::error::{MystiProxyError, Result};
-use crate::http::client::HttpClient;
+use crate::http::auth::{AuthConfig as AuthModuleConfig, Authenticator};
+use crate::http::client::HttpClientPool;
+use crate::metrics::MetricsManager;
 use crate::mock::MockResponse;
 use crate::router::{Route, Router};
 
@@ -46,17 +48,16 @@ pub enum RouteMatch {
 #[derive(Clone)]
 pub struct HttpRequestHandler {
     config: Arc<EngineConfig>,
-    client: Arc<HttpClient>,
+    client_pool: Arc<HttpClientPool>,
     router: Arc<Router>,
+    authenticator: Option<Arc<Authenticator>>,
+    metrics: Arc<MetricsManager>,
 }
 
 impl HttpRequestHandler {
     /// 创建新的请求处理器
     pub fn new(config: Arc<EngineConfig>) -> Result<Self> {
-        let client = Arc::new(HttpClient::new(
-            config.target.clone(),
-            config.request_timeout,
-        ));
+        let client_pool = Arc::new(HttpClientPool::new());
 
         let mut router = Router::new();
         if let Some(locations) = &config.locations {
@@ -70,10 +71,37 @@ impl HttpRequestHandler {
             }
         }
 
+        // 创建 Authenticator（如果配置了鉴权）
+        let authenticator = if let Some(auth_config) = &config.auth {
+            let auth_module_config = AuthModuleConfig {
+                auth_type: match auth_config.auth_type.as_str() {
+                    "jwt" => crate::http::auth::AuthType::Jwt {
+                        secret: auth_config.jwt_secret.clone().ok_or_else(|| 
+                            MystiProxyError::Config("JWT auth requires jwt_secret".to_string())
+                        )?,
+                        issuer: None,
+                        audience: None,
+                    },
+                    _ => crate::http::auth::AuthType::Header,
+                },
+                header_name: auth_config.header_name.clone(),
+                expected_value: auth_config.expected_value.clone(),
+                enabled: auth_config.enabled,
+            };
+            Some(Arc::new(Authenticator::new(auth_module_config)))
+        } else {
+            None
+        };
+
+        // 创建 MetricsManager
+        let metrics = Arc::new(MetricsManager::new());
+
         Ok(Self {
             config,
-            client,
+            client_pool,
             router: Arc::new(router),
+            authenticator,
+            metrics,
         })
     }
 
@@ -116,7 +144,7 @@ fn build_mock_response(location: &LocationConfig) -> MockResponse {
     mock
 }
 
-fn apply_request_modifications(
+async fn apply_request_modifications(
     config: &EngineConfig,
     request: Request<Incoming>,
     location: &LocationConfig,
@@ -182,6 +210,12 @@ fn apply_request_modifications(
             }
         }
 
+        // 处理请求体
+        if let Some(_body_config) = &request_config.body {
+            // TODO: 实现请求体转换功能
+            // 暂时直接返回原始请求
+        }
+
         return new_request
             .body(request.into_body())
             .map_err(MystiProxyError::Http);
@@ -225,12 +259,69 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
         let config = self.config.clone();
-        let client = self.client.clone();
+        let client_pool = self.client_pool.clone();
         let router = self.router.clone();
+        let authenticator = self.authenticator.clone();
+        let metrics = self.metrics.clone();
 
         Box::pin(async move {
+            let start_time = Instant::now();
             let path = req.uri().path().to_string();
+            let method = req.method().to_string();
             debug!("Handling request: {} {}", req.method(), path);
+
+            // 检查是否为 WebSocket 升级请求
+            if crate::http::is_websocket_upgrade_request(&req) {
+                info!("WebSocket upgrade request received");
+                
+                // 进行认证
+                if let Some(auth) = &authenticator {
+                    let auth_result = auth.authenticate(req.headers())?;
+                    if !auth_result.authenticated {
+                        let response = Response::builder()
+                            .status(StatusCode::UNAUTHORIZED)
+                            .body(Self::empty_body())
+                            .map_err(MystiProxyError::Http)?;
+
+                        // 记录性能指标
+                        let duration = start_time.elapsed();
+                        metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
+
+                        return Ok(response);
+                    }
+                }
+
+                // 处理 WebSocket 升级
+                let response = crate::http::handle_websocket_upgrade(req).await?;
+
+                // 记录性能指标
+                let duration = start_time.elapsed();
+                metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
+
+                // 转换响应体类型
+                let (parts, body) = response.into_parts();
+                let new_response = Response::from_parts(parts, Self::empty_body());
+
+                return Ok(new_response);
+            }
+
+            // 进行认证
+            if let Some(auth) = authenticator {
+                let auth_result = auth.authenticate(req.headers())?;
+                if !auth_result.authenticated {
+                    let response = Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(Self::empty_body())
+                        .map_err(MystiProxyError::Http)?;
+
+                    // 记录性能指标
+                    let duration = start_time.elapsed();
+                    metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
+
+                    return Ok(response);
+                }
+                debug!("Authentication successful: {:?}", auth_result.user);
+            }
 
             let route_match = match router.match_uri(&path) {
                 Some((route, _match_result)) => {
@@ -265,11 +356,12 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                     info!("Proxying request to: {}", target);
 
                     let modified_request = if let Some(loc) = &location {
-                        apply_request_modifications(&config, req, loc)?
+                        apply_request_modifications(&config, req, loc).await?
                     } else {
                         req
                     };
 
+                    let client = client_pool.get_or_create(target.clone(), config.request_timeout).await;
                     let response = client.send_request(modified_request).await?;
 
                     let (parts, body) = response.into_parts();
@@ -281,6 +373,10 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let new_response = Response::from_parts(parts, Self::full_body(body_bytes));
 
+                    // 记录性能指标
+                    let duration = start_time.elapsed();
+                    metrics.record_http_request(&method, &path, new_response.status().as_u16(), duration);
+
                     Ok(new_response)
                 }
                 RouteMatch::Mock(mock) => {
@@ -290,7 +386,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         tokio::time::sleep(Duration::from_millis(mock.delay_ms)).await;
                     }
 
-                    let mut builder =
+                    let mut builder = 
                         Response::builder().status(StatusCode::from_u16(mock.status).map_err(
                             |e| MystiProxyError::Proxy(format!("Invalid status code: {e}")),
                         )?);
@@ -307,13 +403,23 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let response = builder.body(body).map_err(MystiProxyError::Http)?;
 
+                    // 记录性能指标
+                    let duration = start_time.elapsed();
+                    metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
+
                     Ok(response)
                 }
-                RouteMatch::Static { root, path } => {
-                    info!("Serving static file: {}", path);
-                    let service =
+                RouteMatch::Static { root, path: static_path } => {
+                    info!("Serving static file: {}", static_path);
+                    let service = 
                         crate::http::static_files::StaticFileService::new(PathBuf::from(root));
-                    service.serve(&path).await
+                    let response = service.serve(&static_path).await?;
+
+                    // 记录性能指标
+                    let duration = start_time.elapsed();
+                    metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
+
+                    Ok(response)
                 }
                 RouteMatch::None => {
                     warn!("No route matched for: {}", path);
@@ -321,6 +427,10 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         .status(StatusCode::NOT_FOUND)
                         .body(Self::empty_body())
                         .map_err(MystiProxyError::Http)?;
+
+                    // 记录性能指标
+                    let duration = start_time.elapsed();
+                    metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
                     Ok(response)
                 }

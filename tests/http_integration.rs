@@ -42,6 +42,8 @@ fn make_engine_config(port: u16, locations: Vec<LocationConfig>) -> EngineConfig
         } else {
             Some(locations)
         },
+        auth: None,
+        tls: None,
     }
 }
 
@@ -55,7 +57,7 @@ async fn start_test_server(locations: Vec<LocationConfig>) -> String {
     let config = make_engine_config(port, locations);
     let handler = create_handler(Arc::new(config)).expect("failed to create handler");
 
-    let mut server = HttpServer::new(HttpServerConfig::new(listen.clone(), None), handler);
+    let mut server = HttpServer::new(HttpServerConfig::new(listen.clone(), None), handler, None);
     server.start().await.expect("failed to start test server");
 
     tokio::spawn(async move {

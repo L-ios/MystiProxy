@@ -46,6 +46,52 @@ pub struct EngineConfig {
     /// 位置配置
     #[serde(default)]
     pub locations: Option<Vec<LocationConfig>>,
+    /// TLS 配置
+    #[serde(default)]
+    pub tls: Option<TlsConfig>,
+    /// HTTP 鉴权配置
+    #[serde(default)]
+    pub auth: Option<AuthConfig>,
+}
+
+/// TLS 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TlsConfig {
+    /// 证书文件路径
+    pub cert_path: String,
+    /// 私钥文件路径
+    pub key_path: String,
+    /// 客户端 CA 证书路径（用于双向认证）
+    #[serde(default)]
+    pub client_ca_path: Option<String>,
+    /// 是否启用双向认证
+    #[serde(default)]
+    pub mutual_auth: bool,
+}
+
+/// HTTP 鉴权配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthConfig {
+    /// 鉴权类型
+    pub auth_type: String,
+    /// 鉴权头部名称
+    #[serde(default = "default_auth_header")]
+    pub header_name: String,
+    /// 期望的鉴权值
+    pub expected_value: Option<String>,
+    /// JWT 密钥
+    pub jwt_secret: Option<String>,
+    /// 是否启用
+    #[serde(default = "default_auth_enabled")]
+    pub enabled: bool,
+}
+
+fn default_auth_header() -> String {
+    "Authorization".to_string()
+}
+
+fn default_auth_enabled() -> bool {
+    true
 }
 
 /// 证书配置
