@@ -96,8 +96,6 @@ tungstenite = "0.21"
 
 # Prometheus metrics
 prometheus = "0.13"
-metrics = "0.18"
-metrics-exporter-prometheus = "0.14"
 
 # MD4, MD5 for NTLM authentication
 md4 = "0.10"
