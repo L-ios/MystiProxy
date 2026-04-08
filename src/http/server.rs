@@ -15,8 +15,6 @@ use hyper::server::conn::http1;
 use hyper::service::Service;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
-use tokio::net::TcpStream;
-use tokio_rustls::server::TlsStream;
 use tracing::{error, info, warn};
 
 use crate::error::{MystiProxyError, Result};

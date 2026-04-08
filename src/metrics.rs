@@ -52,7 +52,7 @@ impl MetricsManager {
     }
 
     /// 记录 HTTP 请求指标
-    pub fn record_http_request(&self, method: &str, path: &str, status: u16, duration: Duration) {
+    pub fn record_http_request(&self, _method: &str, _path: &str, _status: u16, duration: Duration) {
         self.http_requests_total.inc();
         self.http_request_duration_seconds.observe(duration.as_secs_f64());
     }
@@ -63,12 +63,12 @@ impl MetricsManager {
     }
 
     /// 记录错误指标
-    pub fn record_error(&self, error_type: &str) {
+    pub fn record_error(&self, _error_type: &str) {
         self.errors_total.inc();
     }
 
     /// 记录内存使用指标
-    pub fn record_memory_usage(&self, used: u64, total: u64) {
+    pub fn record_memory_usage(&self, used: u64, _total: u64) {
         self.memory_usage_bytes.set(used as f64);
     }
 }

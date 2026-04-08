@@ -299,7 +299,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                 metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
                 // 转换响应体类型
-                let (parts, body) = response.into_parts();
+                let (parts, _body) = response.into_parts();
                 let new_response = Response::from_parts(parts, Self::empty_body());
 
                 return Ok(new_response);

@@ -80,6 +80,23 @@ impl ProxyServer {
         Ok(Self::new(proxy_config))
     }
 
+    /// 从简单配置创建代理服务器
+    pub fn from_simple_config(
+        listen: String,
+        target: String,
+        timeout: Option<Duration>,
+    ) -> Result<Self> {
+        let listen_addr = Address::parse(&listen)?;
+        let target_addr = Address::parse(&target)?;
+
+        Ok(Self::new(ProxyConfig {
+            listen: listen_addr,
+            target: target_addr,
+            proxy_type: ProxyType::Tcp,
+            timeout,
+        }))
+    }
+
     /// 启动代理服务器
     pub async fn start(&mut self) -> Result<()> {
         info!(
@@ -166,94 +183,6 @@ impl ProxyServer {
     }
 }
 
-/// TCP 代理服务（简化版本）
-pub struct TcpProxy {
-    /// 监听地址
-    listen: String,
-    /// 目标地址
-    target: String,
-    /// 超时时间
-    timeout: Option<Duration>,
-}
-
-impl TcpProxy {
-    /// 创建新的 TCP 代理实例
-    pub fn new(listen: String, target: String, timeout: Option<Duration>) -> Self {
-        Self {
-            listen,
-            target,
-            timeout,
-        }
-    }
-
-    /// 启动并运行代理服务器
-    pub async fn run(&self) -> Result<()> {
-        let listener = StreamListener::new(self.listen.clone()).await?;
-        info!("TCP proxy listening on {}", self.listen);
-
-        loop {
-            match listener.accept().await {
-                Ok((stream, addr)) => {
-                    info!("Accepted connection from {}", addr);
-
-                    let target = self.target.clone();
-                    let timeout_duration = self.timeout;
-
-                    tokio::spawn(async move {
-                        if let Err(e) =
-                            Self::handle_connection(stream, target, timeout_duration).await
-                        {
-                            error!("Connection error: {}", e);
-                        }
-                    });
-                }
-                Err(e) => {
-                    error!("Failed to accept connection: {}", e);
-                }
-            }
-        }
-    }
-
-    async fn handle_connection(
-        stream: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + 'static,
-        target_addr: String,
-        timeout_duration: Option<Duration>,
-    ) -> Result<()> {
-        let result = if let Some(timeout) = timeout_duration {
-            forward_to_target_with_timeout(stream, &target_addr, timeout).await
-        } else {
-            forward_to_target(stream, &target_addr).await
-        };
-
-        match result {
-            Ok(forward_result) => {
-                info!(
-                    "Connection closed: {} bytes to target, {} bytes to client",
-                    forward_result.stats.client_to_target, forward_result.stats.target_to_client
-                );
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
-/// 旧的 Proxy 结构体（保持向后兼容）
-pub struct Proxy;
-
-impl Proxy {
-    /// 创建新的代理实例
-    pub fn new() -> Self {
-        Proxy
-    }
-}
-
-impl Default for Proxy {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,5 +218,41 @@ mod tests {
         assert!(proxy_config.listen.is_tcp());
         assert!(proxy_config.target.is_unix());
         assert_eq!(proxy_config.timeout, Some(Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn test_proxy_server_from_simple_config() {
+        let server = ProxyServer::from_simple_config(
+            "tcp://0.0.0.0:3128".to_string(),
+            "tcp://127.0.0.1:8080".to_string(),
+            Some(Duration::from_secs(30)),
+        )
+        .unwrap();
+
+        assert!(server.listen_addr().is_tcp());
+        assert!(server.target_addr().is_tcp());
+    }
+
+    #[test]
+    fn test_proxy_server_from_simple_config_with_timeout() {
+        let server = ProxyServer::from_simple_config(
+            "tcp://0.0.0.0:9090".to_string(),
+            "tcp://127.0.0.1:3000".to_string(),
+            None,
+        )
+        .unwrap();
+
+        assert!(server.listen_addr().is_tcp());
+        assert!(server.target_addr().is_tcp());
+    }
+
+    #[test]
+    fn test_proxy_server_from_simple_config_invalid_address() {
+        let result = ProxyServer::from_simple_config(
+            "invalid-address".to_string(),
+            "tcp://127.0.0.1:8080".to_string(),
+            None,
+        );
+        assert!(result.is_err());
     }
 }

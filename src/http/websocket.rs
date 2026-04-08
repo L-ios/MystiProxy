@@ -6,10 +6,7 @@ use std::convert::Infallible;
 
 use http_body_util::Empty;
 use hyper::header;
-use hyper::upgrade::Upgraded;
 use hyper::{Request, Response, StatusCode};
-use tokio_tungstenite::WebSocketStream;
-use tracing::{debug, error, info};
 
 use crate::error::{MystiProxyError, Result};
 
