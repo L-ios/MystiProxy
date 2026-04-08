@@ -13,7 +13,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 /// 初始化 CryptoProvider（rustls 0.23 需要）
 fn init_crypto_provider() {
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
 /// 生成测试用的自签名证书
