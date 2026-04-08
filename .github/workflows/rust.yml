@@ -199,7 +199,7 @@ jobs:
         with:
           context: ./container
           file: ./container/Dockerfile.mystiproxy
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/${{ env.DOCKER_OWNER }}/mystiproxy:latest
@@ -216,7 +216,7 @@ jobs:
       - name: Build and push mysticentral image
         uses: docker/build-push-action@v5
         with:
-          context: ./mysticentral
+          context: .
           file: ./mysticentral/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
