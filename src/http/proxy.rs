@@ -422,6 +422,7 @@ impl Service<Request<Incoming>> for HttpProxyService {
 }
 
 /// HTTP 代理接受器（支持 CONNECT 隧道）
+#[derive(Clone)]
 pub struct HttpProxyAcceptor {
     config: Arc<HttpProxyConfig>,
 }

@@ -44,6 +44,7 @@ fn make_engine_config(port: u16, locations: Vec<LocationConfig>) -> EngineConfig
         },
         auth: None,
         tls: None,
+        upstream: None,
     }
 }
 
@@ -125,6 +126,8 @@ fn mock_location(path: &str, mode: MatchMode, status: u16) -> LocationConfig {
             body: None,
         }),
         request: None,
+        index_files: None,
+        enable_directory_listing: None,
     }
 }
 
@@ -145,6 +148,8 @@ fn mock_location_with_headers(
             body: None,
         }),
         request: None,
+        index_files: None,
+        enable_directory_listing: None,
     }
 }
 
@@ -156,6 +161,8 @@ fn static_location(path: &str, mode: MatchMode, root: &str) -> LocationConfig {
         root: Some(root.to_string()),
         response: None,
         request: None,
+        index_files: None,
+        enable_directory_listing: None,
     }
 }
 
@@ -174,6 +181,8 @@ fn mock_location_with_static_body(path: &str, mode: MatchMode, status: u16) -> L
             }),
         }),
         request: None,
+        index_files: None,
+        enable_directory_listing: None,
     }
 }
 

@@ -6,6 +6,7 @@ mod auth;
 mod body;
 mod client;
 mod handler;
+mod header;
 mod ntlm;
 mod proxy;
 mod server;
@@ -19,6 +20,7 @@ use hyper::body::{Bytes, Incoming};
 // 重导出公共接口
 pub use auth::{AuthConfig, AuthResult, AuthType, Authenticator, Claims};
 pub use body::{read_json_body, write_json_body, BodyTransformer};
+pub use header::HeaderTransformer;
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
 pub use ntlm::{NtlmAuthenticator, NtlmConfig, NtlmVersion, Type2Message};

@@ -183,6 +183,79 @@ impl ProxyServer {
     }
 }
 
+
+/// TCP 代理服务（简化版本）
+pub struct TcpProxy {
+    /// 监听地址
+    listen: String,
+    /// 目标地址
+    target: String,
+    /// 超时时间
+    timeout: Option<Duration>,
+}
+
+impl TcpProxy {
+    /// 创建新的 TCP 代理实例
+    pub fn new(listen: String, target: String, timeout: Option<Duration>) -> Self {
+        Self {
+            listen,
+            target,
+            timeout,
+        }
+    }
+
+    /// 启动并运行代理服务器
+    pub async fn run(&self) -> Result<()> {
+        let listener = StreamListener::new(self.listen.clone()).await?;
+        info!("TCP proxy listening on {}", self.listen);
+
+        loop {
+            match listener.accept().await {
+                Ok((stream, addr)) => {
+                    info!("Accepted connection from {}", addr);
+
+                    let target = self.target.clone();
+                    let timeout_duration = self.timeout;
+
+                    tokio::spawn(async move {
+                        if let Err(e) =
+                            Self::handle_connection(stream, target, timeout_duration).await
+                        {
+                            error!("Connection error: {}", e);
+                        }
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to accept connection: {}", e);
+                }
+            }
+        }
+    }
+
+    async fn handle_connection(
+        stream: impl tokio::io::AsyncRead + tokio::io::AsyncWrite + Send + 'static,
+        target_addr: String,
+        timeout_duration: Option<Duration>,
+    ) -> Result<()> {
+        let result = if let Some(timeout) = timeout_duration {
+            forward_to_target_with_timeout(stream, &target_addr, timeout).await
+        } else {
+            forward_to_target(stream, &target_addr).await
+        };
+
+        match result {
+            Ok(forward_result) => {
+                info!(
+                    "Connection closed: {} bytes to target, {} bytes to client",
+                    forward_result.stats.client_to_target, forward_result.stats.target_to_client
+                );
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,6 +285,7 @@ mod tests {
             locations: None,
             auth: None,
             tls: None,
+            upstream: None,
         };
 
         let proxy_config = ProxyConfig::from_engine_config(&engine_config).unwrap();

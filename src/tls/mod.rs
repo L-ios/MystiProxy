@@ -657,18 +657,6 @@ pub fn create_tls_connector_with_client_cert(
     Ok(TlsConnector::from(Arc::new(config)))
 }
 
-/// 保留原有的 TlsLoader 以兼容现有代码
-pub struct TlsLoader;
-
-impl TlsLoader {
-    /// 从文件加载 TLS 配置
-    #[deprecated(note = "请使用 TlsConfig::from_pem_files 代替")]
-    pub fn load_server_config(cert_path: &str, key_path: &str) -> crate::Result<Arc<ServerConfig>> {
-        let config = TlsConfig::from_pem_files(Path::new(cert_path), Path::new(key_path))?;
-        config.to_server_config()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
-use mystiproxy::http::{create_handler, HttpServer, HttpServerConfig};
+use mystiproxy::http::{create_handler, HttpProxyAcceptor, HttpProxyConfig, HttpServer, HttpServerConfig};
 use mystiproxy::metrics::MetricsManager;
 use mystiproxy::proxy::ProxyServer;
 use mystiproxy::{set_engine_name, thread_identity, Result};
@@ -178,6 +178,45 @@ async fn main() -> Result<()> {
                     server.run().await
                 });
             }
+            ProxyType::Forward => {
+                let listen_addr = engine_config.listen.clone();
+                let mut proxy_config = HttpProxyConfig::new();
+                if let Some(timeout) = engine_config.request_timeout {
+                    proxy_config = proxy_config.connect_timeout(timeout).request_timeout(timeout);
+                }
+                if let Some(ref upstream) = engine_config.upstream {
+                    proxy_config = proxy_config.upstream_proxy(upstream);
+                }
+
+                let acceptor = HttpProxyAcceptor::new(proxy_config);
+                let engine_name = name_clone.clone();
+                tasks.spawn(async move {
+                    set_engine_name(&engine_name);
+                    let listener = match tokio::net::TcpListener::bind(&listen_addr).await {
+                        Ok(l) => l,
+                        Err(e) => {
+                            error!("Forward proxy bind failed '{}': {}", engine_name, e);
+                            return Err(e.into());
+                        }
+                    };
+                    info!("Forward proxy '{}' listening on {}", engine_name, listen_addr);
+                    loop {
+                        match listener.accept().await {
+                            Ok((stream, _addr)) => {
+                                let acceptor = acceptor.clone();
+                                tokio::spawn(async move {
+                                    if let Err(e) = acceptor.handle_connection(stream).await {
+                                        warn!("Forward proxy connection error: {}", e);
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                warn!("Forward proxy accept error: {}", e);
+                            }
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -230,6 +269,7 @@ fn load_config(args: &MystiArg) -> Result<MystiConfig> {
             locations: None,
             auth: None,
             tls: None,
+            upstream: None,
         };
 
         let mut engine_map = HashMap::new();

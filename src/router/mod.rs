@@ -296,6 +296,8 @@ mod tests {
             root: None,
             response: None,
             request: None,
+            index_files: None,
+            enable_directory_listing: None,
         }
     }
 

@@ -63,6 +63,7 @@ async fn test_tcp_proxy_forwarding() {
         locations: None,
         auth: None,
         tls: None,
+        upstream: None,
     };
 
     let mut server =
@@ -103,6 +104,7 @@ async fn test_tcp_proxy_with_timeout() {
         locations: None,
         auth: None,
         tls: None,
+        upstream: None,
     };
 
     let mut server =
@@ -283,6 +285,7 @@ async fn test_proxy_server_lifecycle() {
         locations: None,
         auth: None,
         tls: None,
+        upstream: None,
     };
 
     let mut server =
@@ -330,6 +333,7 @@ async fn test_proxy_config_from_engine_config() {
         locations: None,
         auth: None,
         tls: None,
+        upstream: None,
     };
 
     let server = ProxyServer::from_engine_config(&config).expect("creation failed");

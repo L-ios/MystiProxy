@@ -19,7 +19,11 @@ use tracing::{debug, info, warn};
 use crate::config::{EngineConfig, HeaderActionType, LocationConfig, ProviderType};
 use crate::error::{MystiProxyError, Result};
 use crate::http::auth::{AuthConfig as AuthModuleConfig, Authenticator};
+use crate::http::body::BodyTransformer;
 use crate::http::client::HttpClientPool;
+use crate::http::header::HeaderTransformer;
+use crate::http::static_files::StaticFileConfig;
+
 use crate::metrics::MetricsManager;
 use crate::mock::MockResponse;
 use crate::router::{Route, Router};
@@ -39,7 +43,7 @@ pub enum RouteMatch {
     /// Mock 响应
     Mock(MockResponse),
     /// 静态文件服务
-    Static { root: String, path: String },
+    Static { config: StaticFileConfig, path: String },
     /// 未匹配
     None,
 }
@@ -149,15 +153,19 @@ async fn apply_request_modifications(
     request: Request<Incoming>,
     location: &LocationConfig,
 ) -> Result<Request<Incoming>> {
-    if let Some(request_config) = &location.request {
-        let method = if let Some(m) = &request_config.method {
+    let method = if let Some(request_config) = &location.request {
+        if let Some(m) = &request_config.method {
             hyper::http::Method::try_from(m.as_str())
                 .map_err(|e| MystiProxyError::Proxy(format!("Invalid method: {e}")))?
         } else {
             request.method().clone()
-        };
+        }
+    } else {
+        request.method().clone()
+    };
 
-        let uri = if let Some(uri_config) = &request_config.uri {
+    let uri = if let Some(request_config) = &location.request {
+        if let Some(uri_config) = &request_config.uri {
             let path = uri_config.path.as_deref().unwrap_or(request.uri().path());
             let query = uri_config.query.as_deref();
 
@@ -170,86 +178,46 @@ async fn apply_request_modifications(
             new_uri.build().map_err(MystiProxyError::Http)?
         } else {
             request.uri().clone()
-        };
-
-        let mut new_request = Request::builder().method(method).uri(uri);
-
-        for (name, value) in request.headers() {
-            new_request = new_request.header(name, value);
         }
+    } else {
+        request.uri().clone()
+    };
 
+    let mut builder = Request::builder().method(method).uri(uri);
+
+    for (name, value) in request.headers() {
+        builder = builder.header(name, value);
+    }
+
+    let apply_header_transform = |builder: http::request::Builder, headers: &std::collections::HashMap<String, crate::config::HeaderAction>| -> Result<http::request::Builder> {
+        let transformer = HeaderTransformer::new(headers.clone());
+        let temp = builder.body(()).map_err(MystiProxyError::Http)?;
+        let (parts, ()) = temp.into_parts();
+        let mut header_map = parts.headers;
+        let method = parts.method;
+        let uri = parts.uri;
+        transformer.apply(&mut header_map)?;
+
+        let mut rebuilt = Request::builder().method(method).uri(uri);
+        for (name, value) in &header_map {
+            rebuilt = rebuilt.header(name, value);
+        }
+        Ok(rebuilt)
+    };
+
+    if let Some(request_config) = &location.request {
         if let Some(headers) = &request_config.headers {
-            for (key, action) in headers {
-                match action.action {
-                    HeaderActionType::Overwrite => {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                    HeaderActionType::Missed => {
-                        if !request.headers().contains_key(key) {
-                            new_request = new_request.header(key, &action.value);
-                        }
-                    }
-                    HeaderActionType::ForceDelete => {}
-                }
-            }
+            builder = apply_header_transform(builder, headers)?;
         }
-
-        if let Some(headers) = &config.header {
-            for (key, action) in headers {
-                match action.action {
-                    HeaderActionType::Overwrite => {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                    HeaderActionType::Missed => {
-                        if !request.headers().contains_key(key) {
-                            new_request = new_request.header(key, &action.value);
-                        }
-                    }
-                    HeaderActionType::ForceDelete => {}
-                }
-            }
-        }
-
-        // 处理请求体
-        if let Some(_body_config) = &request_config.body {
-            // TODO: 实现请求体转换功能
-            // 暂时直接返回原始请求
-        }
-
-        return new_request
-            .body(request.into_body())
-            .map_err(MystiProxyError::Http);
     }
 
     if let Some(headers) = &config.header {
-        let mut new_request = Request::builder()
-            .method(request.method().clone())
-            .uri(request.uri().clone());
-
-        for (name, value) in request.headers() {
-            new_request = new_request.header(name, value);
-        }
-
-        for (key, action) in headers {
-            match action.action {
-                HeaderActionType::Overwrite => {
-                    new_request = new_request.header(key, &action.value);
-                }
-                HeaderActionType::Missed => {
-                    if !request.headers().contains_key(key) {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                }
-                HeaderActionType::ForceDelete => {}
-            }
-        }
-
-        return new_request
-            .body(request.into_body())
-            .map_err(MystiProxyError::Http);
+        builder = apply_header_transform(builder, headers)?;
     }
 
-    Ok(request)
+    builder
+        .body(request.into_body())
+        .map_err(MystiProxyError::Http)
 }
 
 impl Service<Request<Incoming>> for HttpRequestHandler {
@@ -283,7 +251,6 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                             .body(Self::empty_body())
                             .map_err(MystiProxyError::Http)?;
 
-                        // 记录性能指标
                         let duration = start_time.elapsed();
                         metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
@@ -294,7 +261,6 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                 // 处理 WebSocket 升级
                 let response = crate::http::handle_websocket_upgrade(req).await?;
 
-                // 记录性能指标
                 let duration = start_time.elapsed();
                 metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
@@ -314,7 +280,6 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         .body(Self::empty_body())
                         .map_err(MystiProxyError::Http)?;
 
-                    // 记录性能指标
                     let duration = start_time.elapsed();
                     metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
@@ -338,8 +303,18 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         }
                         ProviderType::Static => {
                             let root = location.root.clone().unwrap_or_else(|| ".".to_string());
+                            let mut sf_config = StaticFileConfig {
+                                root: PathBuf::from(root),
+                                ..Default::default()
+                            };
+                            if let Some(ref index_files) = location.index_files {
+                                sf_config.index_files = index_files.clone();
+                            }
+                            if let Some(enable) = location.enable_directory_listing {
+                                sf_config.enable_directory_listing = enable;
+                            }
                             RouteMatch::Static {
-                                root,
+                                config: sf_config,
                                 path: path.clone(),
                             }
                         }
@@ -362,7 +337,54 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                     };
 
                     let client = client_pool.get_or_create(target.clone(), config.request_timeout).await;
-                    let response = client.send_request(modified_request).await?;
+
+                    // 检查是否需要 body 转换
+                    let body_config = location.as_ref()
+                        .and_then(|loc| loc.request.as_ref())
+                        .and_then(|req_conf| req_conf.body.as_ref());
+
+                    let response = if let Some(bc) = body_config {
+                        let (parts, body) = modified_request.into_parts();
+                        let body_bytes = body
+                            .collect()
+                            .await
+                            .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+                            .to_bytes();
+
+                        let mut json_body: serde_json::Value = if body_bytes.is_empty() {
+                            serde_json::Value::Object(serde_json::Map::new())
+                        } else {
+                            serde_json::from_slice(&body_bytes).map_err(|e| {
+                                MystiProxyError::Proxy(format!("Failed to parse request body as JSON: {e}"))
+                            })?
+                        };
+
+                        BodyTransformer::transform(&mut json_body, bc)?;
+
+                        let new_body_bytes = serde_json::to_vec(&json_body).map_err(|e| {
+                            MystiProxyError::Proxy(format!("Failed to serialize transformed body: {e}"))
+                        })?;
+
+                        let mut filtered_headers = hyper::header::HeaderMap::new();
+                        for (name, value) in &parts.headers {
+                            if name != "content-length" && name != "transfer-encoding" {
+                                filtered_headers.insert(name.clone(), value.clone());
+                            }
+                        }
+                        filtered_headers.insert("content-type", "application/json".parse().unwrap());
+                        filtered_headers.insert("content-length", new_body_bytes.len().into());
+
+                        let boxed_request = client.build_boxed_request(
+                            parts.method,
+                            parts.uri,
+                            filtered_headers,
+                            Bytes::from(new_body_bytes),
+                        )?;
+
+                        client.send_boxed(boxed_request).await?
+                    } else {
+                        client.send_request(modified_request).await?
+                    };
 
                     let (parts, body) = response.into_parts();
                     let body_bytes = body
@@ -373,7 +395,6 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let new_response = Response::from_parts(parts, Self::full_body(body_bytes));
 
-                    // 记录性能指标
                     let duration = start_time.elapsed();
                     metrics.record_http_request(&method, &path, new_response.status().as_u16(), duration);
 
@@ -403,19 +424,16 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let response = builder.body(body).map_err(MystiProxyError::Http)?;
 
-                    // 记录性能指标
                     let duration = start_time.elapsed();
                     metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
                     Ok(response)
                 }
-                RouteMatch::Static { root, path: static_path } => {
-                    info!("Serving static file: {}", static_path);
-                    let service = 
-                        crate::http::static_files::StaticFileService::new(PathBuf::from(root));
-                    let response = service.serve(&static_path).await?;
+                RouteMatch::Static { config: sf_config, path } => {
+                    info!("Serving static file: {}", path);
+                    let service = crate::http::static_files::StaticFileService::with_config(sf_config);
+                    let response = service.serve(&path).await?;
 
-                    // 记录性能指标
                     let duration = start_time.elapsed();
                     metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
@@ -428,7 +446,6 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                         .body(Self::empty_body())
                         .map_err(MystiProxyError::Http)?;
 
-                    // 记录性能指标
                     let duration = start_time.elapsed();
                     metrics.record_http_request(&method, &path, response.status().as_u16(), duration);
 
@@ -459,6 +476,8 @@ mod tests {
             root: None,
             response: None,
             request: None,
+            index_files: None,
+            enable_directory_listing: None,
         };
         let route = Route::new("/api/test".to_string(), MatchMode::Full, location).unwrap();
         router.add_route(route);
@@ -479,6 +498,8 @@ mod tests {
             root: None,
             response: None,
             request: None,
+            index_files: None,
+            enable_directory_listing: None,
         };
         let route = Route::new("/api".to_string(), MatchMode::Prefix, location).unwrap();
         router.add_route(route);
@@ -506,6 +527,8 @@ mod tests {
             root: None,
             response: None,
             request: None,
+            index_files: None,
+            enable_directory_listing: None,
         };
 
         let mock = build_mock_response(&location);
@@ -515,13 +538,16 @@ mod tests {
     #[test]
     fn test_route_match_static_variant() {
         let route_match = RouteMatch::Static {
-            root: "/var/www".to_string(),
+            config: StaticFileConfig {
+                root: PathBuf::from("/var/www"),
+                ..Default::default()
+            },
             path: "/index.html".to_string(),
         };
 
         match route_match {
-            RouteMatch::Static { root, path } => {
-                assert_eq!(root, "/var/www");
+            RouteMatch::Static { config, path } => {
+                assert_eq!(config.root, PathBuf::from("/var/www"));
                 assert_eq!(path, "/index.html");
             }
             _ => panic!("Expected Static variant"),

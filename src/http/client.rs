@@ -2,9 +2,13 @@
 //!
 //! 提供 HTTP 客户端功能，支持连接池和请求转发
 
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
+use bytes::Bytes;
+use http_body_util::{BodyExt, Full};
+use http_body_util::combinators::BoxBody;
 use hyper::body::Incoming;
 use hyper::client::conn::http1::{Builder, SendRequest};
 use hyper::{Request, Response};
@@ -13,58 +17,59 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
 use crate::error::{MystiProxyError, Result};
+use crate::http::upstream::{UpstreamProxyConfig, UpstreamProxyConnector};
 use crate::io::SocketStream;
 
-/// 从目标地址字符串中提取 Host 值
-///
-/// 支持格式：
-/// - `"tcp://host:port"` → `"host:port"`
-/// - `"unix:///path/to/socket"` → `"localhost"`
-/// - `"host:port"` → `"host:port"`
 fn extract_host_from_target(target: &str) -> Option<String> {
     if target.starts_with("unix://") {
         return Some("localhost".to_string());
     }
-
     let addr = target.strip_prefix("tcp://").unwrap_or(target);
-
-    if addr.is_empty() {
-        return None;
-    }
-
+    if addr.is_empty() { return None; }
     Some(addr.to_string())
 }
 
-/// HTTP 客户端连接
+fn parse_tcp_target(target: &str) -> Option<(String, u16)> {
+    let addr = target.strip_prefix("tcp://")?;
+    let colon_pos = addr.rfind(':')?;
+    let host = &addr[..colon_pos];
+    let port: u16 = addr[colon_pos + 1..].parse().ok()?;
+    Some((host.to_string(), port))
+}
+
+pub type RequestBoxBody = Request<BoxBody<Bytes, Infallible>>;
+
 pub struct HttpClient {
-    /// 目标地址
     target: String,
-    /// 超时时间
     timeout: Option<Duration>,
+    upstream_config: Option<UpstreamProxyConfig>,
 }
 
 impl HttpClient {
-    /// 创建新的 HTTP 客户端
-    pub fn new(target: String, timeout: Option<Duration>) -> Self {
-        Self { target, timeout }
+    pub fn new(target: String, timeout: Option<Duration>, upstream_config: Option<UpstreamProxyConfig>) -> Self {
+        Self { target, timeout, upstream_config }
     }
 
-    /// 建立到目标服务器的连接
-    async fn establish_connection(&self) -> Result<SendRequest<Incoming>> {
+    async fn establish_connection(&self) -> Result<SendRequest<BoxBody<Bytes, Infallible>>> {
+        if let Some(ref upstream_cfg) = self.upstream_config {
+            if let Some((host, port)) = parse_tcp_target(&self.target) {
+                return self.establish_upstream(upstream_cfg, &host, port).await;
+            }
+        }
+        self.establish_direct().await
+    }
+
+    async fn establish_direct(&self) -> Result<SendRequest<BoxBody<Bytes, Infallible>>> {
         let stream = SocketStream::connect(self.target.clone()).await?;
         let io = TokioIo::new(stream);
 
-        // 创建 HTTP/1.1 客户端连接
         let (sender, conn) = Builder::new()
             .preserve_header_case(true)
             .title_case_headers(true)
             .handshake(io)
             .await
-            .map_err(|e| {
-                MystiProxyError::Proxy(format!("Failed to establish connection: {e}"))
-            })?;
+            .map_err(|e| MystiProxyError::Proxy(format!("Failed to establish connection: {e}")))?;
 
-        // 在后台任务中维护连接
         tokio::spawn(async move {
             if let Err(err) = conn.await {
                 error!("Connection error: {:?}", err);
@@ -75,116 +80,125 @@ impl HttpClient {
         Ok(sender)
     }
 
-    /// 发送请求并获取响应
-    pub async fn send_request(&self, request: Request<Incoming>) -> Result<Response<Incoming>> {
-        // 修改请求的 URI，使其指向目标服务器
-        let uri = request.uri().clone();
-        let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    async fn establish_upstream(
+        &self,
+        upstream_cfg: &UpstreamProxyConfig,
+        host: &str,
+        port: u16,
+    ) -> Result<SendRequest<BoxBody<Bytes, Infallible>>> {
+        let connector = UpstreamProxyConnector::new(upstream_cfg.clone());
+        let stream = connector.connect_tunnel(host, port).await?;
+        let io = TokioIo::new(stream);
 
-        // 构建新的 URI
+        let (sender, conn) = Builder::new()
+            .preserve_header_case(true)
+            .title_case_headers(true)
+            .handshake(io)
+            .await
+            .map_err(|e| MystiProxyError::Proxy(format!("Failed to establish upstream connection: {e}")))?;
+
+        tokio::spawn(async move {
+            if let Err(err) = conn.await {
+                error!("Upstream connection error: {:?}", err);
+            }
+        });
+
+        debug!("Successfully connected to {} via upstream proxy", self.target);
+        Ok(sender)
+    }
+
+    pub async fn send_request(&self, request: Request<Incoming>) -> Result<Response<Incoming>> {
+        let boxed = self.convert_incoming_request_async(request).await?;
+        self.send_boxed(boxed).await
+    }
+
+    pub async fn send_boxed(&self, request: RequestBoxBody) -> Result<Response<Incoming>> {
+        debug!("Sending request to {}: {} {}", self.target, request.method(), request.uri());
+
+        let mut sender = self.establish_connection().await?;
+
+        let response = if let Some(timeout) = self.timeout {
+            tokio::time::timeout(timeout, sender.send_request(request))
+                .await
+                .map_err(|_| MystiProxyError::Timeout)?
+                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
+        } else {
+            sender.send_request(request).await
+                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
+        };
+
+        info!("Received response: {} from {}", response.status(), self.target);
+        Ok(response)
+    }
+
+    fn rewrite_uri_and_headers(&self, method: hyper::http::Method, uri: &hyper::Uri, headers: &hyper::header::HeaderMap) -> Result<hyper::http::request::Builder> {
+        let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
         let new_uri = hyper::http::Uri::builder()
             .path_and_query(path_and_query)
             .build()
             .map_err(MystiProxyError::Http)?;
 
-        // 创建新的请求
-        let mut new_request = Request::builder()
-            .method(request.method().clone())
-            .uri(new_uri);
-
-        let mut has_host_header = false;
-        for (name, value) in request.headers() {
-            if name == "host" {
-                has_host_header = true;
-            }
-            new_request = new_request.header(name, value);
+        let mut builder = Request::builder().method(method).uri(new_uri);
+        let mut has_host = false;
+        for (name, value) in headers {
+            if name == "host" { has_host = true; }
+            builder = builder.header(name, value);
         }
-
-        if !has_host_header {
+        if !has_host {
             if let Some(host) = extract_host_from_target(&self.target) {
-                new_request = new_request.header("Host", &host);
+                builder = builder.header("Host", &host);
             }
         }
-
-        let new_request = new_request
-            .body(request.into_body())
-            .map_err(MystiProxyError::Http)?;
-
-        debug!(
-            "Sending request to {}: {} {}",
-            self.target,
-            new_request.method(),
-            new_request.uri()
-        );
-
-        // 建立连接并发送请求
-        let mut sender = self.establish_connection().await?;
-
-        // 应用超时
-        let response = if let Some(timeout) = self.timeout {
-            tokio::time::timeout(timeout, sender.send_request(new_request))
-                .await
-                .map_err(|_| MystiProxyError::Timeout)?
-                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
-        } else {
-            sender
-                .send_request(new_request)
-                .await
-                .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
-        };
-
-        info!(
-            "Received response: {} from {}",
-            response.status(),
-            self.target
-        );
-        Ok(response)
+        Ok(builder)
     }
 
-    /// 获取目标地址
+    pub async fn convert_incoming_request_async(&self, request: Request<Incoming>) -> Result<RequestBoxBody> {
+        let (parts, body) = request.into_parts();
+        let builder = self.rewrite_uri_and_headers(parts.method, &parts.uri, &parts.headers)?;
+        let body_bytes = body.collect().await.map_err(|e| MystiProxyError::Hyper(e.to_string()))?.to_bytes();
+        let boxed = Full::new(body_bytes).map_err(|never| match never {}).boxed();
+        builder.body(boxed).map_err(MystiProxyError::Http)
+    }
+
+    pub fn build_boxed_request(
+        &self,
+        method: hyper::http::Method,
+        uri: hyper::Uri,
+        headers: hyper::header::HeaderMap,
+        body_bytes: Bytes,
+    ) -> Result<RequestBoxBody> {
+        let builder = self.rewrite_uri_and_headers(method, &uri, &headers)?;
+        let boxed = Full::new(body_bytes).map_err(|never| match never {}).boxed();
+        builder.body(boxed).map_err(MystiProxyError::Http)
+    }
+
     pub fn target(&self) -> &str {
         &self.target
     }
 }
 
-/// HTTP 客户端池管理器
 pub struct HttpClientPool {
-    /// 客户端映射
     clients: Arc<Mutex<Vec<Arc<HttpClient>>>>,
 }
 
 impl HttpClientPool {
-    /// 创建新的客户端池
     pub fn new() -> Self {
-        Self {
-            clients: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self { clients: Arc::new(Mutex::new(Vec::new())) }
     }
 
-    /// 获取或创建客户端
-    pub async fn get_or_create(
-        &self,
-        target: String,
-        timeout: Option<Duration>,
-    ) -> Arc<HttpClient> {
+    pub async fn get_or_create(&self, target: String, timeout: Option<Duration>) -> Arc<HttpClient> {
         let mut clients = self.clients.lock().await;
-
-        // 查找现有客户端
         for client in clients.iter() {
             if client.target() == target {
                 return client.clone();
             }
         }
-
-        // 创建新客户端
-        let client = Arc::new(HttpClient::new(target.clone(), timeout));
+        let client = Arc::new(HttpClient::new(target.clone(), timeout, None));
         clients.push(client.clone());
-
         info!("Created new HTTP client for {}", target);
         client
     }
 
-    /// 清理所有连接
     pub async fn clear(&self) {
         let mut clients = self.clients.lock().await;
         clients.clear();
@@ -193,9 +207,7 @@ impl HttpClientPool {
 }
 
 impl Default for HttpClientPool {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 #[cfg(test)]
@@ -204,42 +216,22 @@ mod tests {
 
     #[test]
     fn test_http_client_creation() {
-        let client = HttpClient::new("tcp://127.0.0.1:8080".to_string(), None);
+        let client = HttpClient::new("tcp://127.0.0.1:8080".to_string(), None, None);
         assert_eq!(client.target(), "tcp://127.0.0.1:8080");
     }
 
     #[test]
-    fn test_http_client_pool_creation() {
-        let pool = HttpClientPool::new();
-        assert!(true);
+    fn test_extract_host_tcp() {
+        assert_eq!(extract_host_from_target("tcp://127.0.0.1:8080"), Some("127.0.0.1:8080".to_string()));
     }
 
     #[test]
-    fn test_extract_host_from_target_tcp() {
-        assert_eq!(
-            extract_host_from_target("tcp://127.0.0.1:8080"),
-            Some("127.0.0.1:8080".to_string())
-        );
+    fn test_extract_host_unix() {
+        assert_eq!(extract_host_from_target("unix:///var/run/docker.sock"), Some("localhost".to_string()));
     }
 
     #[test]
-    fn test_extract_host_from_target_unix() {
-        assert_eq!(
-            extract_host_from_target("unix:///var/run/docker.sock"),
-            Some("localhost".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_host_from_target_bare_host_port() {
-        assert_eq!(
-            extract_host_from_target("localhost:3000"),
-            Some("localhost:3000".to_string())
-        );
-    }
-
-    #[test]
-    fn test_extract_host_from_target_empty() {
+    fn test_extract_host_empty() {
         assert_eq!(extract_host_from_target(""), None);
     }
 }

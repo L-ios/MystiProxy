@@ -52,6 +52,9 @@ pub struct EngineConfig {
     /// HTTP 鉴权配置
     #[serde(default)]
     pub auth: Option<AuthConfig>,
+    /// 上游代理地址 (如 http://proxy:8080)
+    #[serde(default)]
+    pub upstream: Option<String>,
 }
 
 /// TLS 配置
@@ -108,20 +111,16 @@ pub struct CertConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ProxyType {
-    /// TCP 代理
     Tcp,
-    /// HTTP 代理
     Http,
+    Forward,
 }
 
 /// 位置配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocationConfig {
-    /// 位置路径
     pub location: String,
-    /// 匹配模式
     pub mode: MatchMode,
-    /// 提供者类型
     #[serde(default)]
     pub provider: Option<ProviderType>,
     #[serde(default)]
@@ -130,6 +129,10 @@ pub struct LocationConfig {
     pub response: Option<ResponseConfig>,
     #[serde(default)]
     pub request: Option<RequestConfig>,
+    #[serde(default)]
+    pub index_files: Option<Vec<String>>,
+    #[serde(default)]
+    pub enable_directory_listing: Option<bool>,
 }
 
 /// 匹配模式

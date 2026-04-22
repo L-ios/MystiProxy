@@ -17,6 +17,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::context::thread_identity;
 use crate::error::{MystiProxyError, Result};
+use crate::http::ntlm::{NtlmAuthenticator, NtlmConfig};
 
 /// 带线程标识的日志宏
 macro_rules! log_debug {
@@ -82,24 +83,16 @@ impl UpstreamAuth {
 /// 上游代理配置
 #[derive(Debug, Clone)]
 pub struct UpstreamProxyConfig {
-    /// 代理地址 (host:port)
     pub host: String,
-    /// 代理端口
     pub port: u16,
-    /// 协议类型
     pub protocol: UpstreamProtocol,
-    /// 认证信息（可选）
     pub auth: Option<UpstreamAuth>,
-    /// 连接超时
     pub connect_timeout: Duration,
-    /// 是否验证上游 TLS 证书
     pub tls_verify: bool,
-    /// 上游 TLS CA 证书路径
     pub tls_ca_cert: Option<String>,
-    /// 上游 TLS 客户端证书路径（mTLS）
     pub tls_client_cert: Option<String>,
-    /// 上游 TLS 客户端私钥路径（mTLS）
     pub tls_client_key: Option<String>,
+    pub ntlm_config: Option<NtlmConfig>,
 }
 
 impl UpstreamProxyConfig {
@@ -161,6 +154,7 @@ impl UpstreamProxyConfig {
             tls_ca_cert: None,
             tls_client_cert: None,
             tls_client_key: None,
+            ntlm_config: None,
         })
     }
 
@@ -176,6 +170,7 @@ impl UpstreamProxyConfig {
             tls_ca_cert: None,
             tls_client_cert: None,
             tls_client_key: None,
+            ntlm_config: None,
         }
     }
 
@@ -191,6 +186,7 @@ impl UpstreamProxyConfig {
             tls_ca_cert: None,
             tls_client_cert: None,
             tls_client_key: None,
+            ntlm_config: None,
         }
     }
 
@@ -209,6 +205,12 @@ impl UpstreamProxyConfig {
     /// 设置 TLS 验证
     pub fn tls_verify(mut self, verify: bool) -> Self {
         self.tls_verify = verify;
+        self
+    }
+
+    /// 设置 NTLM 认证配置
+    pub fn ntlm_config(mut self, config: NtlmConfig) -> Self {
+        self.ntlm_config = Some(config);
         self
     }
 
@@ -254,25 +256,78 @@ impl UpstreamProxyConnector {
     pub async fn connect_tunnel(&self, target_host: &str, target_port: u16) -> Result<TcpStream> {
         let stream = self.connect().await?;
 
-        // 如果是 HTTPS 代理，需要先建立 TLS 连接
         let mut stream = if self.config.protocol == UpstreamProtocol::Https {
             self.wrap_tls(stream).await?
         } else {
             stream
         };
 
-        // 发送 CONNECT 请求
-        let connect_request = format!(
-            "CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n"
-        );
+        let connect_line = format!("CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n");
+
+        if let Some(ref ntlm_cfg) = self.config.ntlm_config {
+            let authenticator = NtlmAuthenticator::new(ntlm_cfg.clone());
+
+            let type1 = authenticator.create_type1_message();
+            log_debug!("NTLM Type1 for CONNECT {}:{}", target_host, target_port);
+
+            let req = format!("{connect_line}Proxy-Authorization: NTLM {type1}\r\n\r\n");
+            stream.write_all(req.as_bytes()).await.map_err(MystiProxyError::Io)?;
+
+            let mut buf = vec![0u8; 8192];
+            let n = stream.read(&mut buf).await.map_err(MystiProxyError::Io)?;
+            let resp = String::from_utf8_lossy(&buf[..n]);
+            let first_line = resp.lines().next().unwrap_or("");
+
+            if first_line.contains("200") {
+                log_info!("NTLM CONNECT tunnel established (no challenge): {}:{}", target_host, target_port);
+                return Ok(stream);
+            }
+
+            if !first_line.contains("407") {
+                return Err(MystiProxyError::Proxy(format!("Expected 407 NTLM challenge, got: {first_line}")));
+            }
+
+            let challenge = resp.lines()
+                .skip(1)
+                .find_map(|line| {
+                    let lower = line.to_lowercase();
+                    if lower.starts_with("proxy-authenticate:") {
+                        line.split(':').nth(1).map(|v| v.trim().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| MystiProxyError::Proxy("No NTLM challenge in 407 response".to_string()))?;
+
+            let type2 = authenticator.parse_type2_message(&challenge)?;
+            let type3 = authenticator.create_type3_message(&type2);
+            log_debug!("NTLM Type3 for CONNECT {}:{}", target_host, target_port);
+
+            let req = format!("{connect_line}Proxy-Authorization: NTLM {type3}\r\n\r\n");
+            stream.write_all(req.as_bytes()).await.map_err(MystiProxyError::Io)?;
+
+            let mut buf = vec![0u8; 4096];
+            let n = stream.read(&mut buf).await.map_err(MystiProxyError::Io)?;
+            let resp = String::from_utf8_lossy(&buf[..n]);
+            let first_line = resp.lines().next().unwrap_or("");
+
+            if first_line.contains("200") {
+                log_info!("NTLM CONNECT tunnel established: {}:{} via upstream {}",
+                    target_host, target_port, self.config.proxy_addr());
+                return Ok(stream);
+            } else {
+                log_error!("NTLM CONNECT failed: {}", first_line);
+                return Err(MystiProxyError::Proxy(format!("NTLM CONNECT failed: {first_line}")));
+            }
+        }
 
         let connect_request = match &self.config.auth {
             Some(auth) => format!(
                 "{}Proxy-Authorization: {}\r\n\r\n",
-                connect_request,
+                connect_line,
                 auth.to_proxy_authorization()
             ),
-            None => format!("{connect_request}\r\n"),
+            None => format!("{connect_line}\r\n"),
         };
 
         log_debug!("Sending CONNECT request to upstream: {}:{} via {}",
@@ -283,7 +338,6 @@ impl UpstreamProxyConnector {
             .await
             .map_err(MystiProxyError::Io)?;
 
-        // 读取响应
         let mut response_buf = vec![0u8; 4096];
         let n = stream
             .read(&mut response_buf)
