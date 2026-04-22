@@ -263,30 +263,47 @@ pub struct HttpClient {
 }
 ```
 
-### Project Structure
-- `src/config/` - Configuration parsing and validation
-- `src/http/` - HTTP server, client, handler, and utilities
-  - `src/http/auth.rs` - HTTP authentication
-  - `src/http/body.rs` - Request body transformation
-  - `src/http/client.rs` - HTTP client with connection pooling
-  - `src/http/handler.rs` - HTTP request handler
-  - `src/http/ntlm.rs` - NTLM authentication support
-  - `src/http/proxy.rs` - HTTP proxy functionality
-  - `src/http/server.rs` - HTTP server
-  - `src/http/static_files.rs` - Static file serving
-  - `src/http/upstream.rs` - Upstream proxy configuration
-  - `src/http/websocket.rs` - WebSocket support
-- `src/proxy/` - TCP/Unix socket proxy implementation
-- `src/io/` - Stream and listener abstractions
-- `src/mock/` - Mock response generation
-- `src/management/` - Local management module with SQLite storage
-- `src/router/` - Routing functionality
-- `src/tls/` - TLS support
-- `src/error.rs` - Error types and Result alias
-- `src/gateway.rs` - Gateway module with URI mapping
-- `src/metrics.rs` - Performance monitoring with Prometheus
-- `src/main.rs` - Application entry point
-- `src/lib.rs` - Library root with re-exports
+### Workspace Structure
+```
+MystiProxy/                  ← Cargo workspace root
+├── Cargo.toml               ← Pure workspace definition
+├── mystiproxy/              ← HTTP/TCP proxy server
+│   ├── Cargo.toml
+│   ├── src/
+│   ├── tests/
+│   └── examples/
+├── mysticentral/            ← Central management console
+│   ├── Cargo.toml
+│   └── src/
+└── mysti-common/            ← Shared library
+    ├── Cargo.toml
+    └── src/
+```
+
+### mystiproxy Source Structure
+- `mystiproxy/src/config/` - Configuration parsing and validation
+- `mystiproxy/src/http/` - HTTP server, client, handler, and utilities
+  - `mystiproxy/src/http/auth.rs` - HTTP authentication
+  - `mystiproxy/src/http/body.rs` - Request body transformation
+  - `mystiproxy/src/http/client.rs` - HTTP client with connection pooling
+  - `mystiproxy/src/http/handler.rs` - HTTP request handler
+  - `mystiproxy/src/http/ntlm.rs` - NTLM authentication support
+  - `mystiproxy/src/http/proxy.rs` - HTTP proxy functionality
+  - `mystiproxy/src/http/server.rs` - HTTP server
+  - `mystiproxy/src/http/static_files.rs` - Static file serving
+  - `mystiproxy/src/http/upstream.rs` - Upstream proxy configuration
+  - `mystiproxy/src/http/websocket.rs` - WebSocket support
+- `mystiproxy/src/proxy/` - TCP/Unix socket proxy implementation
+- `mystiproxy/src/io/` - Stream and listener abstractions
+- `mystiproxy/src/mock/` - Mock response generation
+- `mystiproxy/src/management/` - Local management module with SQLite storage
+- `mystiproxy/src/router/` - Routing functionality
+- `mystiproxy/src/tls/` - TLS support
+- `mystiproxy/src/error.rs` - Error types and Result alias
+- `mystiproxy/src/gateway.rs` - Gateway module with URI mapping
+- `mystiproxy/src/metrics.rs` - Performance monitoring with Prometheus
+- `mystiproxy/src/main.rs` - Application entry point
+- `mystiproxy/src/lib.rs` - Library root with re-exports
 
 ## Key Dependencies
 - `tokio` - Async runtime
