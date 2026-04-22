@@ -5,7 +5,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY mysti-common ./mysti-common
 COPY mysticentral ./mysticentral
-COPY src ./src
+COPY mystiproxy ./mystiproxy
 
 RUN cargo build --release -p mysticentral
 
