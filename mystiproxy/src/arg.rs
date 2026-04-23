@@ -34,5 +34,4 @@ pub struct MystiArg {
     /// 例如: 10s, 5m, 1h
     #[arg(long)]
     pub timeout: Option<String>,
-
 }

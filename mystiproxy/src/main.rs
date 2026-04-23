@@ -3,7 +3,9 @@ use std::sync::Arc;
 
 use clap::Parser;
 use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
-use mystiproxy::http::{create_handler, HttpProxyAcceptor, HttpProxyConfig, HttpServer, HttpServerConfig};
+use mystiproxy::http::{
+    create_handler, HttpProxyAcceptor, HttpProxyConfig, HttpServer, HttpServerConfig,
+};
 use mystiproxy::metrics::MetricsManager;
 use mystiproxy::proxy::ProxyServer;
 use mystiproxy::{set_engine_name, thread_identity, Result};
@@ -169,7 +171,11 @@ async fn main() -> Result<()> {
                     name_clone,
                     server.listen_addr(),
                     engine_config.target,
-                    if engine_config.tls.is_some() { "HTTPS" } else { "HTTP" }
+                    if engine_config.tls.is_some() {
+                        "HTTPS"
+                    } else {
+                        "HTTP"
+                    }
                 );
 
                 let engine_name = name_clone.clone();
@@ -182,7 +188,9 @@ async fn main() -> Result<()> {
                 let listen_addr = engine_config.listen.clone();
                 let mut proxy_config = HttpProxyConfig::new();
                 if let Some(timeout) = engine_config.request_timeout {
-                    proxy_config = proxy_config.connect_timeout(timeout).request_timeout(timeout);
+                    proxy_config = proxy_config
+                        .connect_timeout(timeout)
+                        .request_timeout(timeout);
                 }
                 if let Some(ref upstream) = engine_config.upstream {
                     proxy_config = proxy_config.upstream_proxy(upstream);
@@ -199,7 +207,10 @@ async fn main() -> Result<()> {
                             return Err(e.into());
                         }
                     };
-                    info!("Forward proxy '{}' listening on {}", engine_name, listen_addr);
+                    info!(
+                        "Forward proxy '{}' listening on {}",
+                        engine_name, listen_addr
+                    );
                     loop {
                         match listener.accept().await {
                             Ok((stream, _addr)) => {
