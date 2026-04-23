@@ -9,6 +9,10 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PG_CONFIG_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+ENV PG_CONFIG_x86_64_unknown_linux_gnu=/usr/lib/x86_64-linux-gnu/pkgconfig
+
 COPY Cargo.toml Cargo.lock ./
 COPY mysti-common ./mysti-common
 COPY mysticentral ./mysticentral
