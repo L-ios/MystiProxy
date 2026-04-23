@@ -1,5 +1,12 @@
 FROM rust:1.85 AS builder
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libssl-dev \
+    pkg-config \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
