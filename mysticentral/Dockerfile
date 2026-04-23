@@ -1,30 +1,9 @@
-FROM rust:1.85 AS builder
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libssl-dev \
-    pkg-config \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-ENV PKG_CONFIG_ALLOW_CROSS=1
-ENV PG_CONFIG_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
-ENV PG_CONFIG_x86_64_unknown_linux_gnu=/usr/lib/x86_64-linux-gnu/pkgconfig
-
-COPY Cargo.toml Cargo.lock ./
-COPY mysti-common ./mysti-common
-COPY mysticentral ./mysticentral
-COPY mystiproxy ./mystiproxy
-
-RUN cargo build --release -p mysticentral
-
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,9 +11,10 @@ RUN useradd -r -s /bin/false appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/mysticentral /usr/local/bin/mysticentral
+COPY mysticentral /usr/local/bin/mysticentral
 
-RUN chown -R appuser:appuser /app
+RUN chmod +x /usr/local/bin/mysticentral && \
+    chown appuser:appuser /usr/local/bin/mysticentral
 
 USER appuser
 
