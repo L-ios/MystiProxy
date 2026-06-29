@@ -1,6 +1,6 @@
 //! 配置模块
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -34,11 +34,16 @@ pub struct EngineConfig {
     #[serde(
         default,
         deserialize_with = "deserialize_option_duration",
+        serialize_with = "serialize_option_duration",
         alias = "timeout"
     )]
     pub request_timeout: Option<Duration>,
     /// 连接超时时间
-    #[serde(default, deserialize_with = "deserialize_option_duration")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_option_duration",
+        serialize_with = "serialize_option_duration"
+    )]
     pub connection_timeout: Option<Duration>,
     /// 请求头配置
     #[serde(default)]
@@ -287,6 +292,25 @@ where
             Ok(Some(duration))
         }
         None => Ok(None),
+    }
+}
+
+/// 自定义 Duration 序列化函数（支持 Option<Duration>）
+fn serialize_option_duration<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match duration {
+        Some(d) => {
+            let secs = d.as_secs_f64();
+            let s = if secs >= 1.0 {
+                format!("{secs}s")
+            } else {
+                format!("{}ms", d.as_millis())
+            };
+            serializer.serialize_str(&s)
+        }
+        None => serializer.serialize_none(),
     }
 }
 

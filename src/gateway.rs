@@ -17,14 +17,14 @@ pub struct UriMapping {
         deserialize_with = "UriMapping::deserialize_method"
     )]
     /// GET, POST, PUT, DELETE. etc
-    methods: Vec<String>,
+    pub methods: Vec<String>,
     /// 根据/进行 split 然后进行最长的uri进行权重匹配
-    uri: String,
+    pub uri: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    service: Option<String>,
-    target_uri: String,
+    pub service: Option<String>,
+    pub target_uri: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    target_service: Option<String>,
+    pub target_service: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -88,8 +88,7 @@ impl UriVariable {
 ///    a. 全量匹配
 ///    b. 前缀匹配
 #[derive(PartialEq, Debug)]
-#[allow(dead_code)]
-enum UriMatch {
+pub enum UriMatch {
     /// 全量匹配
     Exact,
     /// 变量形式匹配
@@ -103,8 +102,7 @@ enum UriMatch {
 }
 
 impl UriMapping {
-    #[allow(dead_code)]
-    fn supports_method(&self, method: &str) -> bool {
+    pub fn supports_method(&self, method: &str) -> bool {
         for mtd in &self.methods {
             if mtd.eq("*") {
                 return true;
@@ -159,8 +157,7 @@ impl UriMapping {
     /// # Returns
     ///
     /// * `bool` - 如果传入的`uri`与`UriMapping`的配置匹配，则返回`true`；否则返回`false`。
-    #[allow(dead_code)]
-    fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
+    pub fn match_uri(&self, in_uri: &str) -> Option<UriMatch> {
         debug!("uri: {}, in_uri: {}", self.uri, in_uri);
         let base_uri = self.uri.as_str();
         // 精确匹配
@@ -227,8 +224,7 @@ impl UriMapping {
         }
     }
 
-    #[allow(dead_code)]
-    fn build_target_uri(&self, in_uri: &str) -> Option<String> {
+    pub fn build_target_uri(&self, in_uri: &str) -> Option<String> {
         match self.match_uri(in_uri).unwrap() {
             UriMatch::Exact => Some(self.target_uri.clone()),
             UriMatch::Prefix => Some(in_uri.replace(self.uri.as_str(), self.target_uri.as_str())),

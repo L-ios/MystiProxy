@@ -7,7 +7,7 @@ use tracing::{info, warn};
 
 use super::error::{ManagementError, Result};
 use super::models::{
-    BodyMatchType, ResponseBodyType as BodyType, CreateMockRequest, MatchingRules, MockConfiguration, ResponseBody,
+    BodyMatchType, BodyType, CreateMockRequest, MatchingRules, MockConfiguration, ResponseBody,
     ResponseConfig,
 };
 use super::repository::MockRepository;

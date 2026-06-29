@@ -13,7 +13,7 @@ pub use mysti_common::{
     // Mock configuration
     MockConfiguration, MockFilter, MockCreateRequest, MockUpdateRequest,
     // Sync types
-    SyncStatus, ConflictResolution,
+    SyncStatus, SyncMessage, ConflictResolution,
     // Additional types needed
     BodyMatchType, ResponseBodyType as BodyType, ResponseBody,
     HeaderMatch, QueryParamMatch, BodyMatch, MatchType, PathPatternType,

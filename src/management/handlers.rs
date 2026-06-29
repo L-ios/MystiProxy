@@ -239,7 +239,7 @@ pub async fn delete_mock(
 pub async fn batch_create_mocks(
     State(state): State<HandlerState>,
     Json(requests): Json<Vec<CreateMockRequest>>,
-) -> Result<(StatusCode, Json<ApiResponse<Vec<MockConfiguration>>), ApiError> {
+) -> Result<(StatusCode, Json<ApiResponse<Vec<MockConfiguration>>>), ApiError> {
     // Validate requests
     for (i, request) in requests.iter().enumerate() {
         if request.name.is_empty() {
