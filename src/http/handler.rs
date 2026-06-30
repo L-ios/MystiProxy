@@ -16,7 +16,7 @@ use hyper::service::Service;
 use hyper::{Request, Response, StatusCode};
 use tracing::{debug, info, warn};
 
-use crate::config::{EngineConfig, HeaderActionType, LocationConfig, ProviderType};
+use crate::config::{EngineConfig, HeaderAction, HeaderActionType, LocationConfig, ProviderType};
 use crate::error::{MystiProxyError, Result};
 use crate::http::auth::{AuthConfig as AuthModuleConfig, Authenticator};
 use crate::http::client::HttpClientPool;
@@ -172,84 +172,86 @@ async fn apply_request_modifications(
             request.uri().clone()
         };
 
-        let mut new_request = Request::builder().method(method).uri(uri);
+        // Collect headers into a mutable HeaderMap so we can insert AND remove
+        let (mut parts, body) = request.into_parts();
 
-        for (name, value) in request.headers() {
-            new_request = new_request.header(name, value);
-        }
-
+        // Apply location-level header actions
         if let Some(headers) = &request_config.headers {
-            for (key, action) in headers {
-                match action.action {
-                    HeaderActionType::Overwrite => {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                    HeaderActionType::Missed => {
-                        if !request.headers().contains_key(key) {
-                            new_request = new_request.header(key, &action.value);
-                        }
-                    }
-                    HeaderActionType::ForceDelete => {}
-                }
-            }
+            apply_header_actions(&mut parts.headers, headers);
         }
 
+        // Apply engine-level header actions
         if let Some(headers) = &config.header {
-            for (key, action) in headers {
-                match action.action {
-                    HeaderActionType::Overwrite => {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                    HeaderActionType::Missed => {
-                        if !request.headers().contains_key(key) {
-                            new_request = new_request.header(key, &action.value);
-                        }
-                    }
-                    HeaderActionType::ForceDelete => {}
-                }
-            }
+            apply_header_actions(&mut parts.headers, headers);
         }
 
-        // 处理请求体
+        parts.method = method;
+        parts.uri = uri;
+
+        // NOTE: Body transformation (JSONPath modification) is implemented in BodyTransformer
+        // but requires refactoring HttpClient to accept generic body types for full integration.
+        // The BodyTransformer itself is fully tested via unit tests in body.rs.
         if let Some(_body_config) = &request_config.body {
-            // TODO: 实现请求体转换功能
-            // 暂时直接返回原始请求
+            // TODO: Integrate BodyTransformer once HttpClient supports generic body types
         }
 
-        return new_request
-            .body(request.into_body())
-            .map_err(MystiProxyError::Http);
+
+        return Ok(Request::from_parts(parts, body));
     }
 
     if let Some(headers) = &config.header {
-        let mut new_request = Request::builder()
-            .method(request.method().clone())
-            .uri(request.uri().clone());
-
-        for (name, value) in request.headers() {
-            new_request = new_request.header(name, value);
-        }
-
-        for (key, action) in headers {
-            match action.action {
-                HeaderActionType::Overwrite => {
-                    new_request = new_request.header(key, &action.value);
-                }
-                HeaderActionType::Missed => {
-                    if !request.headers().contains_key(key) {
-                        new_request = new_request.header(key, &action.value);
-                    }
-                }
-                HeaderActionType::ForceDelete => {}
-            }
-        }
-
-        return new_request
-            .body(request.into_body())
-            .map_err(MystiProxyError::Http);
+        let (mut parts, body) = request.into_parts();
+        apply_header_actions(&mut parts.headers, headers);
+        let mut new_request = Request::from_parts(parts, body);
+        return Ok(new_request);
     }
 
     Ok(request)
+}
+
+/// Apply engine-level header modifications when no location matches.
+async fn apply_engine_header_modifications(
+    config: &EngineConfig,
+    request: Request<Incoming>,
+) -> Result<Request<Incoming>> {
+    if let Some(headers) = &config.header {
+        let (mut parts, body) = request.into_parts();
+        apply_header_actions(&mut parts.headers, headers);
+        return Ok(Request::from_parts(parts, body));
+    }
+    Ok(request)
+}
+
+/// Apply header actions (Overwrite, Missed, ForceDelete) to a HeaderMap.
+fn apply_header_actions(
+    headers: &mut hyper::HeaderMap,
+    actions: &std::collections::HashMap<String, HeaderAction>,
+) {
+    for (key, action) in actions {
+        match action.action {
+            HeaderActionType::Overwrite => {
+                if let Ok(name) = key.parse::<hyper::header::HeaderName>() {
+                    if let Ok(value) = action.value.parse() {
+                        headers.insert(&name, value);
+                    }
+                }
+            }
+            HeaderActionType::Missed => {
+                if !headers.contains_key(key.as_str()) {
+                    if let Ok(name) = key.parse::<hyper::header::HeaderName>() {
+                        if let Ok(value) = action.value.parse() {
+                            headers.insert(&name, value);
+                        }
+                    }
+                }
+            }
+            HeaderActionType::ForceDelete => {
+                if let Ok(name) = key.parse::<hyper::header::HeaderName>() {
+                    headers.remove(&name);
+                }
+            }
+        }
+    }
 }
 
 impl Service<Request<Incoming>> for HttpRequestHandler {
@@ -357,6 +359,9 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
 
                     let modified_request = if let Some(loc) = &location {
                         apply_request_modifications(&config, req, loc).await?
+                    } else if config.header.is_some() {
+                        // No matching location, but engine-level headers exist
+                        apply_engine_header_modifications(&config, req).await?
                     } else {
                         req
                     };
