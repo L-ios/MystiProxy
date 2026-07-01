@@ -480,7 +480,15 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                     info!("Serving static file: {}", static_path);
                     let service = 
                         crate::http::static_files::StaticFileService::new(PathBuf::from(root));
-                    let response = service.serve(&static_path).await?;
+                    // Pass Range header if present
+                    let range_header = req.headers().get("range")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| s.to_string());
+                    let response = if let Some(range) = range_header {
+                        service.serve_with_range(&static_path, Some(&range)).await?
+                    } else {
+                        service.serve(&static_path).await?
+                    };
 
                     // 记录性能指标
                     let duration = start_time.elapsed();
