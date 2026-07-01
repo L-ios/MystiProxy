@@ -167,7 +167,7 @@ jobs:
   docker:
     name: Docker Images
     runs-on: ubuntu-24.04
-    needs: [mystiproxy, frontend]
+    needs: [mystiproxy, mysticentral, frontend]
     permissions:
       packages: write
       contents: read
@@ -223,12 +223,51 @@ jobs:
           name: frontend-${{ env.GIT_COMMIT_ID }}
           path: frontend/dist/
 
-      - name: Build and push mysticentral image
+      - name: Download mysticentral artifact (amd64)
+        uses: actions/download-artifact@v4
+        with:
+          name: mysticentral-x86_64-unknown-linux-gnu-${{ env.GIT_COMMIT_ID }}
+          path: mysticentral-amd64/
+
+      - name: Prepare mysticentral binary (amd64)
+        run: |
+          cd mysticentral-amd64
+          unzip -o mysticentral-*.zip
+          mv mysticentral-*/mysticentral ../mysticentral/mysticentral
+          chmod +x ../mysticentral/mysticentral
+
+      - name: Build and push mysticentral image (amd64)
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./mysticentral
           file: ./mysticentral/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ghcr.io/${{ env.DOCKER_OWNER }}/mysticentral:latest
+            ghcr.io/${{ env.DOCKER_OWNER }}/mysticentral:${{ env.GIT_COMMIT_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Download mysticentral artifact (arm64)
+        uses: actions/download-artifact@v4
+        with:
+          name: mysticentral-aarch64-unknown-linux-gnu-${{ env.GIT_COMMIT_ID }}
+          path: mysticentral-arm64/
+
+      - name: Prepare mysticentral binary (arm64)
+        run: |
+          cd mysticentral-arm64
+          unzip -o mysticentral-*.zip
+          mv mysticentral-*/mysticentral ../mysticentral/mysticentral
+          chmod +x ../mysticentral/mysticentral
+
+      - name: Build and push mysticentral image (arm64)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mysticentral
+          file: ./mysticentral/Dockerfile
+          platforms: linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ghcr.io/${{ env.DOCKER_OWNER }}/mysticentral:latest

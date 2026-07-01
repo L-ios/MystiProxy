@@ -1,19 +1,9 @@
-FROM rust:1.85 AS builder
-
-WORKDIR /app
-
-COPY Cargo.toml Cargo.lock ./
-COPY mysti-common ./mysti-common
-COPY mysticentral ./mysticentral
-COPY src ./src
-
-RUN cargo build --release -p mysticentral
-
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
+    curl \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -21,9 +11,10 @@ RUN useradd -r -s /bin/false appuser
 
 WORKDIR /app
 
-COPY --from=builder /app/target/release/mysticentral /usr/local/bin/mysticentral
+COPY mysticentral /usr/local/bin/mysticentral
 
-RUN chown -R appuser:appuser /app
+RUN chmod +x /usr/local/bin/mysticentral && \
+    chown appuser:appuser /usr/local/bin/mysticentral
 
 USER appuser
 

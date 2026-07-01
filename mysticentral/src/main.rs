@@ -20,6 +20,7 @@ mod handlers;
 mod middleware;
 mod models;
 mod services;
+#[cfg(feature = "legacy-tls")]
 mod tls;
 
 pub use config::Config;
@@ -78,6 +79,7 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
     // Check if TLS is configured
+    #[cfg(feature = "legacy-tls")]
     if let Some(ref tls_config) = config.tls {
         tracing::info!(
             "TLS enabled with version range: {:?} to {:?}",
@@ -151,6 +153,12 @@ async fn main() -> Result<()> {
             });
         }
     } else {
+        tracing::info!("TLS not configured, starting HTTP server");
+        axum::serve(listener, app).await?;
+    }
+
+    #[cfg(not(feature = "legacy-tls"))]
+    {
         tracing::info!("TLS not configured, starting HTTP server");
         axum::serve(listener, app).await?;
     }

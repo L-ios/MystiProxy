@@ -75,11 +75,15 @@ rustls-pemfile = "2"
 webpki-roots = "0.26"
 
 # OpenSSL for legacy TLS 1.0/1.1 support
-openssl = { version = "0.10", features = ["vendored"] }
-tokio-openssl = "0.6"
+openssl = { version = "0.10", optional = true }
+tokio-openssl = { version = "0.6", optional = true }
 
 # Async utilities
 notify = "6.0"
+
+[features]
+default = []
+legacy-tls = ["dep:openssl", "dep:tokio-openssl", "openssl/vendored"]
 
 [dev-dependencies]
 tempfile = "3"
