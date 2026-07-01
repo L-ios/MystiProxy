@@ -144,11 +144,19 @@ fn build_mock_response(location: &LocationConfig) -> MockResponse {
     mock
 }
 
+/// 请求修改结果：未修改 body 或已转换 body
+pub enum ModifiedRequest {
+    /// Body 未转换（仅 headers/URI/method 可能已修改）
+    Incoming(Request<Incoming>),
+    /// Body 已转换（JSON 变换）
+    Bytes(Request<http_body_util::Full<bytes::Bytes>>),
+}
+
 async fn apply_request_modifications(
     config: &EngineConfig,
     request: Request<Incoming>,
     location: &LocationConfig,
-) -> Result<Request<Incoming>> {
+) -> Result<ModifiedRequest> {
     if let Some(request_config) = &location.request {
         let method = if let Some(m) = &request_config.method {
             hyper::http::Method::try_from(m.as_str())
@@ -172,15 +180,12 @@ async fn apply_request_modifications(
             request.uri().clone()
         };
 
-        // Collect headers into a mutable HeaderMap so we can insert AND remove
         let (mut parts, body) = request.into_parts();
 
-        // Apply location-level header actions
+        // Apply header actions
         if let Some(headers) = &request_config.headers {
             apply_header_actions(&mut parts.headers, headers);
         }
-
-        // Apply engine-level header actions
         if let Some(headers) = &config.header {
             apply_header_actions(&mut parts.headers, headers);
         }
@@ -188,25 +193,65 @@ async fn apply_request_modifications(
         parts.method = method;
         parts.uri = uri;
 
-        // NOTE: Body transformation (JSONPath modification) is implemented in BodyTransformer
-        // but requires refactoring HttpClient to accept generic body types for full integration.
-        // The BodyTransformer itself is fully tested via unit tests in body.rs.
-        if let Some(_body_config) = &request_config.body {
-            // TODO: Integrate BodyTransformer once HttpClient supports generic body types
+        // Body JSON transformation
+        if let Some(body_config) = &request_config.body {
+            if let Some(json_config) = &body_config.json {
+                let body_bytes = body
+                    .collect()
+                    .await
+                    .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+                    .to_bytes();
+
+                if !body_bytes.is_empty() {
+                    if let Ok(mut json_value) =
+                        serde_json::from_slice::<serde_json::Value>(&body_bytes)
+                    {
+                        let transform_config = crate::config::BodyConfig {
+                            json: Some(json_config.clone()),
+                            body_type: None,
+                        };
+                        if let Err(e) = crate::http::body::BodyTransformer::transform(
+                            &mut json_value,
+                            &transform_config,
+                        ) {
+                            warn!("Body transformation failed: {}", e);
+                        }
+
+                        let new_bytes = bytes::Bytes::from(
+                            serde_json::to_vec(&json_value).unwrap_or_else(|_| body_bytes.to_vec()),
+                        );
+
+                        parts.headers.remove("content-length");
+                        parts.headers.insert(
+                            "content-length",
+                            hyper::header::HeaderValue::from_str(&new_bytes.len().to_string())
+                                .map_err(|e| MystiProxyError::Proxy(format!("Invalid content-length: {e}")))?,
+                        );
+
+                        return Ok(ModifiedRequest::Bytes(Request::from_parts(parts, http_body_util::Full::new(new_bytes))));
+                    }
+                }
+
+                // Body consumed but not JSON - return raw bytes
+                return Ok(ModifiedRequest::Bytes(Request::from_parts(
+                    parts,
+                    http_body_util::Full::new(bytes::Bytes::from(body_bytes.to_vec())),
+                )));
+            }
         }
 
-
-        return Ok(Request::from_parts(parts, body));
+        // No body transformation configured
+        return Ok(ModifiedRequest::Incoming(Request::from_parts(parts, body)));
     }
 
+    // Engine-level headers only (no location match)
     if let Some(headers) = &config.header {
         let (mut parts, body) = request.into_parts();
         apply_header_actions(&mut parts.headers, headers);
-        let mut new_request = Request::from_parts(parts, body);
-        return Ok(new_request);
+        return Ok(ModifiedRequest::Incoming(Request::from_parts(parts, body)));
     }
 
-    Ok(request)
+    Ok(ModifiedRequest::Incoming(request))
 }
 
 /// Apply engine-level header modifications when no location matches.
@@ -357,26 +402,43 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                 RouteMatch::Proxy { target, location } => {
                     info!("Proxying request to: {}", target);
 
-                    let modified_request = if let Some(loc) = &location {
-                        apply_request_modifications(&config, req, loc).await?
+                    let client = client_pool.get_or_create(target.clone(), config.request_timeout).await;
+
+                    // Get response parts + body bytes, handling both Incoming and Bytes body types
+                    let (resp_parts, body_bytes) = if let Some(loc) = &location {
+                        match apply_request_modifications(&config, req, loc).await? {
+                            ModifiedRequest::Incoming(r) => {
+                                let resp = client.send_request(r).await?;
+                                let (parts, body) = resp.into_parts();
+                                let bytes = body.collect().await
+                                    .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+                                    .to_bytes();
+                                (parts, bytes)
+                            }
+                            ModifiedRequest::Bytes(r) => {
+                                let resp = client.send_request_with_body(r).await?;
+                                let (parts, body) = resp.into_parts();
+                                (parts, body) // body is already bytes::Bytes
+                            }
+                        }
                     } else if config.header.is_some() {
-                        // No matching location, but engine-level headers exist
-                        apply_engine_header_modifications(&config, req).await?
+                        let r = apply_engine_header_modifications(&config, req).await?;
+                        let resp = client.send_request(r).await?;
+                        let (parts, body) = resp.into_parts();
+                        let bytes = body.collect().await
+                            .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+                            .to_bytes();
+                        (parts, bytes)
                     } else {
-                        req
+                        let resp = client.send_request(req).await?;
+                        let (parts, body) = resp.into_parts();
+                        let bytes = body.collect().await
+                            .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+                            .to_bytes();
+                        (parts, bytes)
                     };
 
-                    let client = client_pool.get_or_create(target.clone(), config.request_timeout).await;
-                    let response = client.send_request(modified_request).await?;
-
-                    let (parts, body) = response.into_parts();
-                    let body_bytes = body
-                        .collect()
-                        .await
-                        .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
-                        .to_bytes();
-
-                    let new_response = Response::from_parts(parts, Self::full_body(body_bytes));
+                    let new_response = Response::from_parts(resp_parts, Self::full_body(body_bytes));
 
                     // 记录性能指标
                     let duration = start_time.elapsed();

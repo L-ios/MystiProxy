@@ -75,6 +75,176 @@ impl HttpClient {
         Ok(sender)
     }
 
+    /// 发送请求（支持任意 body 类型）。
+    ///
+    /// 通过 raw TCP 序列化发送，绕过 hyper `SendRequest` 对 `Incoming` 类型的限制。
+    /// 用于 handler 在转发前修改请求体（如 JSON 变换）的场景。
+    /// 返回的 response body 类型是 `Full<Bytes>`，handler 通过 `collect()` 统一处理。
+    pub async fn send_request_with_body<B>(
+        &self,
+        request: Request<B>,
+    ) -> Result<Response<bytes::Bytes>>
+    where
+        B: hyper::body::Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        use http_body_util::BodyExt;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        // Extract request metadata BEFORE consuming the body
+        let method = request.method().clone();
+        let uri = request.uri().clone();
+        let headers = request.headers().clone();
+
+        // Collect body to bytes
+        let body_bytes = request
+            .into_body()
+            .collect()
+            .await
+            .map_err(|e| {
+                let boxed: Box<dyn std::error::Error + Send + Sync> = e.into();
+                MystiProxyError::Hyper(boxed.to_string())
+            })?
+            .to_bytes();
+
+        // Connect via raw TCP
+        let mut stream = SocketStream::connect(self.target.clone()).await?;
+        let host = extract_host_from_target(&self.target).unwrap_or_default();
+
+        // Serialize request line
+        let path = uri
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/");
+
+        // Serialize headers
+        let mut header_str = String::new();
+        let mut has_host = false;
+        let mut has_cl = false;
+        for (name, value) in &headers {
+            let name_str = name.as_str();
+            if name_str.eq_ignore_ascii_case("host") {
+                has_host = true;
+            }
+            if name_str.eq_ignore_ascii_case("content-length") {
+                has_cl = true;
+            }
+            header_str.push_str(&format!(
+                "{name_str}: {}\r\n",
+                value.to_str().unwrap_or("")
+            ));
+        }
+        if !has_host {
+            header_str.push_str(&format!("Host: {host}\r\n"));
+        }
+        if !has_cl {
+            header_str.push_str(&format!("Content-Length: {}\r\n", body_bytes.len()));
+        }
+
+        // Write request
+        let full_request = format!("{} {path} HTTP/1.1\r\n{header_str}\r\n", method.as_str());
+        stream
+            .write_all(full_request.as_bytes())
+            .await
+            .map_err(MystiProxyError::Io)?;
+        if !body_bytes.is_empty() {
+            stream
+                .write_all(&body_bytes)
+                .await
+                .map_err(MystiProxyError::Io)?;
+        }
+        stream.flush().await.map_err(MystiProxyError::Io)?;
+
+        // Read response until we have complete headers
+        let mut buf = vec![0u8; 16384];
+        let mut total = 0;
+        let timeout = self.timeout;
+
+        let read_fn = async {
+            loop {
+                if total >= buf.len() {
+                    buf.resize(buf.len() * 2, 0);
+                }
+                let n = stream.read(&mut buf[total..]).await?;
+                if n == 0 {
+                    break;
+                }
+                total += n;
+                if buf[..total].windows(4).any(|w| w == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            Ok::<(), std::io::Error>(())
+        };
+
+        if let Some(t) = timeout {
+            tokio::time::timeout(t, read_fn)
+                .await
+                .map_err(|_| MystiProxyError::Timeout)?
+                .map_err(MystiProxyError::Io)?;
+        } else {
+            read_fn.await.map_err(MystiProxyError::Io)?;
+        }
+
+        // Parse response headers
+        let header_end = buf[..total]
+            .windows(4)
+            .position(|w| w == b"\r\n\r\n")
+            .ok_or_else(|| MystiProxyError::Proxy("Incomplete response headers".to_string()))?;
+
+        let headers_str = std::str::from_utf8(&buf[..header_end])
+            .map_err(|_| MystiProxyError::Proxy("Invalid UTF-8 in response headers".to_string()))?;
+
+        let mut lines = headers_str.lines();
+        let status_line = lines
+            .next()
+            .ok_or_else(|| MystiProxyError::Proxy("Empty response".to_string()))?;
+        let status_parts: Vec<&str> = status_line.split_whitespace().collect();
+        let status_code: u16 = status_parts
+            .get(1)
+            .and_then(|s| s.parse().ok())
+            .ok_or_else(|| MystiProxyError::Proxy(format!("Invalid status: {status_line}")))?;
+
+        let status = hyper::StatusCode::from_u16(status_code)
+            .map_err(|e| MystiProxyError::Proxy(format!("Invalid status code: {e}")))?;
+
+        let mut response_builder = Response::builder().status(status);
+        for line in lines {
+            if let Some(colon_pos) = line.find(':') {
+                let name = line[..colon_pos].trim();
+                let value = line[colon_pos + 1..].trim();
+                if let (Ok(hn), Ok(hv)) = (
+                    name.parse::<hyper::header::HeaderName>(),
+                    value.parse::<hyper::header::HeaderValue>(),
+                ) {
+                    response_builder = response_builder.header(hn, hv);
+                }
+            }
+        }
+
+        // Extract body bytes (everything after headers, plus read remaining if needed)
+        let body_start = header_end + 4;
+        let mut body_data = Vec::new();
+        if body_start < total {
+            body_data.extend_from_slice(&buf[body_start..total]);
+        }
+        // Read remaining body until EOF or Content-Length satisfied
+        loop {
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            if n == 0 {
+                break;
+            }
+            body_data.extend_from_slice(&buf[..n]);
+        }
+
+        info!("Received response: {} from {}", status_code, self.target);
+
+        response_builder
+            .body(bytes::Bytes::from(body_data))
+            .map_err(MystiProxyError::Http)
+    }
+
     /// 发送请求并获取响应
     pub async fn send_request(&self, request: Request<Incoming>) -> Result<Response<Incoming>> {
         // 修改请求的 URI，使其指向目标服务器
