@@ -141,15 +141,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_rustls::server::TlsStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector};
 
-#[cfg(feature = "legacy-tls")]
-mod openssl_tls;
-
-#[cfg(feature = "hot-reload")]
-mod reloader;
-
-#[cfg(feature = "hot-reload")]
-pub use reloader::CertificateReloader;
-
 /// TLS 版本配置
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TlsVersion {
@@ -188,7 +179,14 @@ impl std::fmt::Debug for TlsConfig {
             .field("client_ca_count", &self.client_ca.as_ref().map(|v| v.len()))
             .field("min_version", &self.min_version)
             .field("max_version", &self.max_version)
-            .field("alpn_protocols", &self.alpn_protocols.iter().map(|p| String::from_utf8_lossy(p).to_string()).collect::<Vec<_>>())
+            .field(
+                "alpn_protocols",
+                &self
+                    .alpn_protocols
+                    .iter()
+                    .map(|p| String::from_utf8_lossy(p).to_string())
+                    .collect::<Vec<_>>(),
+            )
             .finish()
     }
 }
@@ -321,9 +319,9 @@ impl TlsConfig {
     /// 设置 TLS 版本范围
     pub fn with_version_range(mut self, min: TlsVersion, max: TlsVersion) -> crate::Result<Self> {
         if min as u8 > max as u8 {
-            return Err(crate::MystiProxyError::Tls(
-                format!("无效的 TLS 版本范围: min ({min:?}) > max ({max:?})")
-            ));
+            return Err(crate::MystiProxyError::Tls(format!(
+                "无效的 TLS 版本范围: min ({min:?}) > max ({max:?})"
+            )));
         }
         self.min_version = min;
         self.max_version = max;
@@ -422,8 +420,10 @@ impl TlsConfigBuilder {
             return Err(crate::MystiProxyError::Tls("未找到证书".to_string()));
         }
 
-        self.key = Some(private_key(&mut key_content.as_slice())?
-            .ok_or_else(|| crate::MystiProxyError::Tls("未找到私钥".to_string()))?);
+        self.key = Some(
+            private_key(&mut key_content.as_slice())?
+                .ok_or_else(|| crate::MystiProxyError::Tls("未找到私钥".to_string()))?,
+        );
 
         Ok(self)
     }
@@ -431,18 +431,20 @@ impl TlsConfigBuilder {
     /// 设置客户端 CA 证书
     pub fn with_client_ca(mut self, ca_path: &Path) -> crate::Result<Self> {
         let ca_content = std::fs::read(ca_path)?;
-        self.client_ca = Some(certs(&mut ca_content.as_slice())
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {e}")))?);
+        self.client_ca = Some(
+            certs(&mut ca_content.as_slice())
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|e| crate::MystiProxyError::Tls(format!("CA 证书解析失败: {e}")))?,
+        );
         Ok(self)
     }
 
     /// 设置 TLS 版本范围
     pub fn with_version_range(mut self, min: TlsVersion, max: TlsVersion) -> crate::Result<Self> {
         if min as u8 > max as u8 {
-            return Err(crate::MystiProxyError::Tls(
-                format!("无效的 TLS 版本范围: min ({min:?}) > max ({max:?})")
-            ));
+            return Err(crate::MystiProxyError::Tls(format!(
+                "无效的 TLS 版本范围: min ({min:?}) > max ({max:?})"
+            )));
         }
         self.min_version = min;
         self.max_version = max;
@@ -457,9 +459,9 @@ impl TlsConfigBuilder {
 
     /// 构建 TLS 配置
     pub fn build(self) -> crate::Result<TlsConfig> {
-        let key = self.key.ok_or_else(|| 
-            crate::MystiProxyError::Tls("未设置私钥".to_string())
-        )?;
+        let key = self
+            .key
+            .ok_or_else(|| crate::MystiProxyError::Tls("未设置私钥".to_string()))?;
 
         Ok(TlsConfig {
             cert_chain: self.cert_chain,
@@ -717,8 +719,7 @@ MIIBkTCB+wIJAKHBfpLxAAAAADANBgkqhkiG9w0BAQsFADANMQswCQYDVQQDDAJj
 
     #[test]
     fn test_tls_version_range_invalid() {
-        let result = TlsConfig::builder()
-            .with_version_range(TlsVersion::V1_3, TlsVersion::V1_0);
+        let result = TlsConfig::builder().with_version_range(TlsVersion::V1_3, TlsVersion::V1_0);
         assert!(result.is_err());
         if let Err(e) = result {
             assert!(e.to_string().contains("无效的 TLS 版本范围"));
@@ -727,8 +728,7 @@ MIIBkTCB+wIJAKHBfpLxAAAAADANBgkqhkiG9w0BAQsFADANMQswCQYDVQQDDAJj
 
     #[test]
     fn test_tls_config_builder_missing_key() {
-        let result = TlsConfig::builder()
-            .build();
+        let result = TlsConfig::builder().build();
         assert!(result.is_err());
         if let Err(e) = result {
             assert!(e.to_string().contains("未设置私钥"));
@@ -751,7 +751,7 @@ MIIBkTCB+wIJAKHBfpLxAAAAADANBgkqhkiG9w0BAQsFADANMQswCQYDVQQDDAJj
             max_version: TlsVersion::V1_3,
             alpn_protocols: vec![b"h2".to_vec()],
         };
-        
+
         assert_eq!(config.alpn_protocols, vec![b"h2".to_vec()]);
     }
 }

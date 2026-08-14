@@ -3,10 +3,9 @@
 //! This crate provides the central management server for HTTP mock configurations,
 //! supporting team collaboration, environment management, and distributed synchronization.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use axum::middleware::from_fn_with_state;
 use axum::Router;
-use hyper::server::conn::http1;
-use hyper_util::rt::TokioIo;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
@@ -57,12 +56,31 @@ async fn main() -> Result<()> {
         services::AuthService::new(config.jwt.secret.clone(), config.jwt.expiration_hours)?;
     tracing::info!("Authentication service initialized");
 
+    // Bootstrap initial admin user on empty database
+    if let Err(e) = services::ensure_admin_user(&db_pool).await {
+        tracing::warn!("Admin bootstrap failed: {}", e);
+    }
+
     // Build application state
-    let app_state = handlers::AppState::new(db_pool, auth_service);
+    let app_state = handlers::AppState::new(db_pool.clone(), auth_service.clone());
+
+    // Auth middleware state
+    let mw_state = middleware::auth::AuthMiddlewareState {
+        auth_service,
+        pool: db_pool.clone(),
+    };
 
     // Build application router
     let app = Router::new()
         .merge(handlers::create_routes())
+        .merge(
+            handlers::create_protected_routes()
+                .layer(from_fn_with_state(
+                    mw_state.clone(),
+                    middleware::auth::auth_middleware,
+                ))
+                .layer(axum::Extension(mw_state)),
+        )
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()

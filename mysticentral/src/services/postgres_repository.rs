@@ -83,7 +83,7 @@ impl MockRepository for PostgresMockRepository {
         let state_config = config
             .state_config
             .as_ref()
-            .map(|s| serde_json::to_value(s))
+            .map(serde_json::to_value)
             .transpose()?;
         let version_vector = serde_json::to_value(&config.version_vector)?;
         let source = match config.source {
@@ -205,10 +205,8 @@ impl MockConfigurationRow {
             serde_json::from_value(self.matching_rules)?;
         let response_config: crate::models::ResponseConfig =
             serde_json::from_value(self.response_config)?;
-        let state_config: Option<crate::models::StateConfig> = self
-            .state_config
-            .map(|v| serde_json::from_value(v))
-            .transpose()?;
+        let state_config: Option<crate::models::StateConfig> =
+            self.state_config.map(serde_json::from_value).transpose()?;
         let version_vector: crate::models::VersionVector =
             serde_json::from_value(self.version_vector)?;
 

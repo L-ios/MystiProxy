@@ -31,6 +31,9 @@ pub enum ApiError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Bad request: {0}")]
     BadRequest(String),
 
@@ -58,6 +61,7 @@ impl IntoResponse for ApiError {
                 "Internal server error".to_string(),
             ),
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg),
+            ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             ApiError::Json(e) => (StatusCode::BAD_REQUEST, format!("JSON error: {}", e)),
         };

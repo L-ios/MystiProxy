@@ -87,3 +87,4 @@ legacy-tls = ["dep:openssl", "dep:tokio-openssl", "openssl/vendored"]
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.4", features = ["util"] }

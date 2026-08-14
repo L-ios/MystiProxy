@@ -166,7 +166,7 @@ impl ConflictService {
         let mut store = self.store.write().await;
         let initial_len = store.len();
 
-        store.retain(|_, c| !c.resolved || c.resolved_at.map_or(true, |t| t > older_than));
+        store.retain(|_, c| !c.resolved || c.resolved_at.is_none_or(|t| t > older_than));
 
         initial_len - store.len()
     }

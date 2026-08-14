@@ -13,6 +13,48 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mysticentral_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/mysticentral_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup component add clippy rustfmt
+          cargo --version
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: Run tests (workspace)
+        run: cargo test --workspace
+
+      - name: Run auth integration tests (live PostgreSQL)
+        run: cargo test -p mysticentral --test auth_integration
+
   mystiproxy:
     name: MystiProxy (${{ matrix.target }})
     runs-on: ${{ matrix.os }}

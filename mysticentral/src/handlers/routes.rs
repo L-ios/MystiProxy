@@ -13,6 +13,11 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::error::ApiError;
+use crate::handlers::auth::{login, logout};
+use crate::handlers::users::{
+    change_own_password, create_user, delete_user, get_current_user, get_user, list_users,
+    update_user,
+};
 use crate::models::{
     EnvironmentCreateRequest, EnvironmentFilter, EnvironmentUpdateRequest, HeartbeatRequest,
     InstanceFilter, InstanceRegisterRequest, MockCreateRequest, MockFilter, MockUpdateRequest,
@@ -38,6 +43,7 @@ impl AppState {
 
 /// Create the application router with all routes
 pub fn create_routes() -> Router<AppState> {
+    // Public routes (no auth)
     Router::new()
         .route("/health", axum::routing::get(health_check))
         .route(
@@ -89,6 +95,30 @@ pub fn create_routes() -> Router<AppState> {
             "/api/v1/analytics/mock/:id",
             axum::routing::get(get_mock_analytics),
         )
+        .route("/api/v1/auth/login", axum::routing::post(login))
+        .route("/api/v1/auth/logout", axum::routing::post(logout))
+}
+
+/// Create protected (JWT-required) user management routes.
+///
+/// The caller must apply the auth middleware layer after merging.
+pub fn create_protected_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            "/api/v1/users",
+            axum::routing::get(list_users).post(create_user),
+        )
+        .route("/api/v1/users/me", axum::routing::get(get_current_user))
+        .route(
+            "/api/v1/users/me/password",
+            axum::routing::put(change_own_password),
+        )
+        .route(
+            "/api/v1/users/:id",
+            axum::routing::get(get_user)
+                .put(update_user)
+                .delete(delete_user),
+        )
 }
 
 // ============================================================================
@@ -118,7 +148,7 @@ pub async fn list_mocks(
 
     match service.list(filter).await {
         Ok((configs, total)) => {
-            let total_pages = (total + 19) / 20;
+            let total_pages = total.div_ceil(20);
             Json(json!({
                 "data": configs,
                 "pagination": {
@@ -196,7 +226,7 @@ pub async fn list_environments(
 
     match service.list(filter).await {
         Ok((envs, total)) => {
-            let total_pages = (total + 19) / 20;
+            let total_pages = total.div_ceil(20);
             Json(json!({
                 "data": envs,
                 "pagination": {
@@ -273,7 +303,7 @@ pub async fn list_instances(
 
     match service.list(filter).await {
         Ok((instances, total)) => {
-            let total_pages = (total + 19) / 20;
+            let total_pages = total.div_ceil(20);
             Json(json!({
                 "data": instances,
                 "pagination": {

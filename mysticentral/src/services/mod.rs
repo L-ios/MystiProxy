@@ -2,7 +2,8 @@
 //!
 //! Provides business logic and repository abstractions.
 
-mod auth_service;
+pub(crate) mod auth_service;
+mod bootstrap;
 mod conflict_service;
 mod environment_repository;
 mod environment_service;
@@ -13,9 +14,11 @@ mod postgres_repository;
 mod repository;
 mod sync_protocol;
 mod sync_service;
+pub(crate) mod user_repository;
 mod websocket;
 
 pub use auth_service::AuthService;
+pub use bootstrap::ensure_admin_user;
 pub use environment_repository::{EnvironmentRepository, PostgresEnvironmentRepository};
 pub use environment_service::EnvironmentService;
 pub use instance_repository::{InstanceRepository, PostgresInstanceRepository};
@@ -26,3 +29,4 @@ pub use repository::MockRepository;
 pub use sync_protocol::{
     ConflictReason, ConflictResolution, SyncConflict, SyncPullResponse, SyncPushResponse,
 };
+pub use user_repository::{PostgresUserRepository, UserRepository};

@@ -9,16 +9,12 @@ use uuid::Uuid;
 /// User role for RBAC
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum UserRole {
     Admin,
     Editor,
+    #[default]
     Viewer,
-}
-
-impl Default for UserRole {
-    fn default() -> Self {
-        Self::Viewer
-    }
 }
 
 impl std::fmt::Display for UserRole {
@@ -56,6 +52,7 @@ pub struct User {
     pub role: UserRole,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_login_at: Option<DateTime<Utc>>,
 }
 
 impl User {
@@ -71,8 +68,32 @@ impl User {
             role,
             created_at: now,
             updated_at: now,
+            last_login_at: None,
         }
     }
+}
+
+/// Request to create a user
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserCreateRequest {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+    pub role: UserRole,
+}
+
+/// Request to update a user
+#[derive(Debug, Clone, Deserialize)]
+pub struct UserUpdateRequest {
+    pub email: Option<String>,
+    pub role: Option<UserRole>,
+}
+
+/// Request to change own password
+#[derive(Debug, Clone, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub old_password: String,
+    pub new_password: String,
 }
 
 /// Team model
