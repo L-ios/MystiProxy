@@ -179,7 +179,7 @@ sequenceDiagram
 
 以下为实测确认的现状，注意与旧文档的差异：
 
-1. **metrics 端点未实现**：`GET :9090/metrics` 无响应。`metrics.rs` 的 `start_server()` 仅打日志，Prometheus 导出实际未实现（指标在进程内计数但无 HTTP 暴露）。
+1. **metrics 端点已实现（2026-08-15 F4）**：`GET :9090/metrics` 返回标准 exposition 文本（`text/plain; version=0.0.4`），含 5 个指标；`http_requests_total` 带 method/status 标签；main 与 handler 共享进程级 Registry（`global_metrics()` 单例）。
 2. **连接池已接入主流程**：`doc/features.md` 中"连接池尚未启用"的说法已过时，运行日志证实 `HttpClientPool` 已被调用。
 3. **鉴权已接入主流程**：`doc/features.md` 中"认证逻辑未接入 HTTP Handler"的说法已过时，`handler.rs` 中 `authenticator.authenticate()` 已在请求链路中调用。
 4. **实例注册 `endpoint_url` 为必填字段**，API 会返回明确错误提示。

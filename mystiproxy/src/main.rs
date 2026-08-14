@@ -6,7 +6,6 @@ use mystiproxy::config::{EngineConfig, MystiConfig, ProxyType};
 use mystiproxy::http::{
     create_handler, HttpProxyAcceptor, HttpProxyConfig, HttpServer, HttpServerConfig,
 };
-use mystiproxy::metrics::MetricsManager;
 use mystiproxy::proxy::ProxyServer;
 use mystiproxy::{set_engine_name, thread_identity, Result};
 use std::collections::HashMap;
@@ -77,13 +76,17 @@ async fn main() -> Result<()> {
         .event_format(CustomFormatter)
         .init();
 
-    // 初始化监控指标
-    let mut metrics_manager = MetricsManager::new();
-    metrics_manager.init();
+    // 初始化监控指标（进程级单例）
+    let metrics_shared = mystiproxy::metrics::global_metrics();
 
     // 启动指标导出服务器
     let metrics_addr: SocketAddr = "127.0.0.1:9090".parse().unwrap();
-    metrics_manager.start_server(metrics_addr).await;
+    tokio::spawn({
+        let m = metrics_shared.clone();
+        async move {
+            m.start_server(metrics_addr).await;
+        }
+    });
 
     tracing::info!("MystiProxy 启动中...");
 

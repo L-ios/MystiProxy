@@ -98,8 +98,8 @@ impl HttpRequestHandler {
             None
         };
 
-        // 创建 MetricsManager
-        let metrics = Arc::new(MetricsManager::new());
+        // 使用进程级共享 MetricsManager（与 main.rs 的导出服务同一实例）
+        let metrics = crate::metrics::global_metrics();
 
         Ok(Self {
             config,
