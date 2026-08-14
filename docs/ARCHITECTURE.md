@@ -18,8 +18,9 @@ MystiProxy 是一个微服务模拟器，主要解决服务迁移过程中的调
 #### 4 层 Socket 转发
 
 - TCP 协议转发
-- UDP 协议转发（可能存在丢包问题）
 - UDS 协议转发
+
+> 注：UDP 转发尚未实现。`Address::parse("udp://...")` 当前会返回解析错误（见 `mystiproxy/src/proxy/address.rs` 中的单元测试 `test_parse_invalid_protocol`），仅支持 `tcp://` 与 `unix://` 两种地址。
 
 #### 7 层 HTTP 转发
 
@@ -123,12 +124,12 @@ HTTP 入口请求如何转换为目标的地址的请求：
 
 ### 支持的协议
 
-| 监听方式 | 目标类型 | TCP | UDP | UDS |
-|----------|----------|-----|-----|-----|
-| 监听 | ✓ | ✓ | ✓ | ✓ |
-| TCP | ✓ | ✓ | ✓ | ✓ |
-| UDP | ✓ | ✓ | ✓ | ✓ |
-| UDS | ✓ | ✓ | ✓ | ✓ |
+| 监听\\目标 | TCP | UDS |
+|----------|-----|-----|
+| TCP | ✓ | ✓ |
+| UDS | ✓ | ✓ |
+
+> 注：当前仅支持 TCP 与 UDS（Unix Domain Socket），UDP 尚未实现。
 
 ## 路由映射
 

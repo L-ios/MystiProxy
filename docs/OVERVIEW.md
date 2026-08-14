@@ -93,7 +93,7 @@ flowchart TD
 ## 四、功能全景
 
 - **代理能力**
-  - TCP 4 层转发：`tcp://` 与 `unix://` 互转、连接/请求双超时、双向流量统计
+  - TCP 4 层转发：`tcp://` 与 `unix://` 互转、连接/请求双超时、双向流量统计（UDP 尚未实现，地址解析层即拒绝）
   - HTTP 7 层代理：method/URI 改写、Header 增删改（overwrite/missed/forceDelete）、JSONPath 请求体转换（overwrite/add/delete）、Host 头智能重写
   - Forward 正向代理：CONNECT 隧道、上游代理链式转发、Basic 认证、主机黑白名单
 - **Mock 与内容服务**
