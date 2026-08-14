@@ -1,12 +1,12 @@
 //! 性能监控模块
-//! 
+//!
 //! 提供 Prometheus 指标收集和导出功能
 
 use std::net::SocketAddr;
 use std::time::Duration;
 
 use prometheus::{Counter, Gauge, Histogram, HistogramOpts, Opts};
-use tracing::{info};
+use tracing::info;
 
 /// 监控指标管理器
 pub struct MetricsManager {
@@ -21,11 +21,21 @@ impl MetricsManager {
     /// 创建新的监控指标管理器
     pub fn new() -> Self {
         // 创建指标
-        let http_requests_total = Counter::with_opts(Opts::new("http_requests_total", "Total HTTP requests")).unwrap();
-        let http_request_duration_seconds = Histogram::with_opts(HistogramOpts::new("http_request_duration_seconds", "HTTP request duration in seconds")).unwrap();
-        let tcp_connection_duration_seconds = Histogram::with_opts(HistogramOpts::new("tcp_connection_duration_seconds", "TCP connection duration in seconds")).unwrap();
+        let http_requests_total =
+            Counter::with_opts(Opts::new("http_requests_total", "Total HTTP requests")).unwrap();
+        let http_request_duration_seconds = Histogram::with_opts(HistogramOpts::new(
+            "http_request_duration_seconds",
+            "HTTP request duration in seconds",
+        ))
+        .unwrap();
+        let tcp_connection_duration_seconds = Histogram::with_opts(HistogramOpts::new(
+            "tcp_connection_duration_seconds",
+            "TCP connection duration in seconds",
+        ))
+        .unwrap();
         let errors_total = Counter::with_opts(Opts::new("errors_total", "Total errors")).unwrap();
-        let memory_usage_bytes = Gauge::with_opts(Opts::new("memory_usage_bytes", "Memory usage in bytes")).unwrap();
+        let memory_usage_bytes =
+            Gauge::with_opts(Opts::new("memory_usage_bytes", "Memory usage in bytes")).unwrap();
 
         Self {
             http_requests_total,
@@ -52,14 +62,22 @@ impl MetricsManager {
     }
 
     /// 记录 HTTP 请求指标
-    pub fn record_http_request(&self, _method: &str, _path: &str, _status: u16, duration: Duration) {
+    pub fn record_http_request(
+        &self,
+        _method: &str,
+        _path: &str,
+        _status: u16,
+        duration: Duration,
+    ) {
         self.http_requests_total.inc();
-        self.http_request_duration_seconds.observe(duration.as_secs_f64());
+        self.http_request_duration_seconds
+            .observe(duration.as_secs_f64());
     }
 
     /// 记录 TCP 连接指标
     pub fn record_tcp_connection(&self, duration: Duration) {
-        self.tcp_connection_duration_seconds.observe(duration.as_secs_f64());
+        self.tcp_connection_duration_seconds
+            .observe(duration.as_secs_f64());
     }
 
     /// 记录错误指标

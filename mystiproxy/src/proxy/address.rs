@@ -59,15 +59,11 @@ impl Address {
                 Ok(Address::Tcp(socket_addr))
             }
             #[cfg(unix)]
-            "unix" => {
-                Ok(Address::Unix(PathBuf::from(address)))
-            }
+            "unix" => Ok(Address::Unix(PathBuf::from(address))),
             #[cfg(not(unix))]
-            "unix" => {
-                Err(MystiProxyError::Other(
-                    "Unix Domain Sockets are not supported on this platform".to_string(),
-                ))
-            }
+            "unix" => Err(MystiProxyError::Other(
+                "Unix Domain Sockets are not supported on this platform".to_string(),
+            )),
             _ => Err(MystiProxyError::Other(format!(
                 "Unsupported protocol: {protocol}"
             ))),

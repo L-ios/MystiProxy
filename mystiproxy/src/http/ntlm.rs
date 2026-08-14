@@ -156,7 +156,9 @@ impl NtlmAuthenticator {
             .map_err(|e| MystiProxyError::Proxy(format!("Invalid NTLM Type2 message: {e}")))?;
 
         if decoded.len() < 48 {
-            return Err(MystiProxyError::Proxy("NTLM Type2 message too short".to_string()));
+            return Err(MystiProxyError::Proxy(
+                "NTLM Type2 message too short".to_string(),
+            ));
         }
 
         // Verify signature
@@ -167,21 +169,34 @@ impl NtlmAuthenticator {
         // Verify message type (2)
         let msg_type = u32::from_le_bytes([decoded[8], decoded[9], decoded[10], decoded[11]]);
         if msg_type != 2 {
-            return Err(MystiProxyError::Proxy(format!("Expected Type 2, got {msg_type}")));
+            return Err(MystiProxyError::Proxy(format!(
+                "Expected Type 2, got {msg_type}"
+            )));
         }
 
         // Extract challenge
-        let challenge = [decoded[24], decoded[25], decoded[26], decoded[27], decoded[28], decoded[29], decoded[30], decoded[31]];
+        let challenge = [
+            decoded[24],
+            decoded[25],
+            decoded[26],
+            decoded[27],
+            decoded[28],
+            decoded[29],
+            decoded[30],
+            decoded[31],
+        ];
 
         // Extract target info
         let target_info_len = u16::from_le_bytes([decoded[40], decoded[41]]) as usize;
-        let target_info_offset = u32::from_le_bytes([decoded[44], decoded[45], decoded[46], decoded[47]]) as usize;
+        let target_info_offset =
+            u32::from_le_bytes([decoded[44], decoded[45], decoded[46], decoded[47]]) as usize;
 
-        let target_info = if target_info_len > 0 && target_info_offset + target_info_len <= decoded.len() {
-            decoded[target_info_offset..target_info_offset + target_info_len].to_vec()
-        } else {
-            Vec::new()
-        };
+        let target_info =
+            if target_info_len > 0 && target_info_offset + target_info_len <= decoded.len() {
+                decoded[target_info_offset..target_info_offset + target_info_len].to_vec()
+            } else {
+                Vec::new()
+            };
 
         log_debug!("Parsed NTLM Type2 message, challenge: {:02x?}", challenge);
 
@@ -373,9 +388,7 @@ fn compute_ntlm_response_v1(ntlm_hash: &[u8; 16], challenge: &[u8; 8]) -> Vec<u8
     // DES encrypt challenge with hash
     let key1 = create_des_key(&ntlm_hash[0..7]);
     let key2 = create_des_key(&ntlm_hash[7..14]);
-    let key3 = create_des_key(&[
-        ntlm_hash[14], ntlm_hash[15], 0, 0, 0, 0, 0,
-    ]);
+    let key3 = create_des_key(&[ntlm_hash[14], ntlm_hash[15], 0, 0, 0, 0, 0]);
 
     let des1 = Des::new_from_slice(&key1).unwrap();
     let des2 = Des::new_from_slice(&key2).unwrap();

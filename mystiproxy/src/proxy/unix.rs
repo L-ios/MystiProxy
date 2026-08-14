@@ -51,9 +51,8 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
     }
 
     // 绑定 Unix Domain Socket
-    UnixListener::bind(path).map_err(|e| {
-        MystiProxyError::Proxy(format!("无法绑定 Unix Domain Socket {path:?}: {e}"))
-    })
+    UnixListener::bind(path)
+        .map_err(|e| MystiProxyError::Proxy(format!("无法绑定 Unix Domain Socket {path:?}: {e}")))
 }
 
 /// 连接到 Unix Domain Socket
@@ -79,9 +78,9 @@ pub async fn bind_unix(path: &Path) -> Result<UnixListener> {
 /// }
 /// ```
 pub async fn connect_unix(path: &Path) -> Result<UnixStream> {
-    UnixStream::connect(path).await.map_err(|e| {
-        MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {path:?}: {e}"))
-    })
+    UnixStream::connect(path)
+        .await
+        .map_err(|e| MystiProxyError::Proxy(format!("无法连接到 Unix Domain Socket {path:?}: {e}")))
 }
 
 /// UDS 到 TCP 的双向数据转发

@@ -130,7 +130,10 @@ impl LocalManagementConfig {
     /// Load configuration from a file
     pub fn from_file(path: &std::path::Path) -> super::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        let config: Self = if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+        let config: Self = if path
+            .extension()
+            .map_or(false, |ext| ext == "yaml" || ext == "yml")
+        {
             serde_yaml::from_str(&content)?
         } else {
             serde_json::from_str(&content)?
@@ -140,7 +143,10 @@ impl LocalManagementConfig {
 
     /// Save configuration to a file
     pub fn to_file(&self, path: &std::path::Path) -> super::Result<()> {
-        let content = if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+        let content = if path
+            .extension()
+            .map_or(false, |ext| ext == "yaml" || ext == "yml")
+        {
             serde_yaml::to_string(self)?
         } else {
             serde_json::to_string_pretty(self)?

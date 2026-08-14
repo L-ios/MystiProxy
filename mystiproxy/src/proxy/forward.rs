@@ -228,7 +228,10 @@ mod tests {
         )
         .await;
 
-        assert!(result.is_ok(), "forward_bidirectional should complete within timeout");
+        assert!(
+            result.is_ok(),
+            "forward_bidirectional should complete within timeout"
+        );
     }
 
     #[tokio::test]

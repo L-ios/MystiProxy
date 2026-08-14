@@ -49,10 +49,7 @@ pub fn get_thread_id() -> u64 {
 pub fn thread_identity() -> String {
     let engine_name = get_engine_name();
     let thread_id = get_thread_id();
-    let thread_name = thread::current()
-        .name()
-        .unwrap_or("unknown")
-        .to_string();
+    let thread_name = thread::current().name().unwrap_or("unknown").to_string();
 
     match engine_name {
         Some(engine) => format!("{engine}:{thread_id}:{thread_name}"),

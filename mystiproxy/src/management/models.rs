@@ -4,20 +4,34 @@
 
 // Re-export all models from mysti-common
 pub use mysti_common::{
+    BodyMatch,
+    // Additional types needed
+    BodyMatchType,
+    ConflictResolution,
+    HeaderMatch,
     // Core types
-    HttpMethod, MockSource, VersionVector,
+    HttpMethod,
+    MatchType,
     // Matching rules
     MatchingRules,
+    // Mock configuration
+    MockConfiguration,
+    MockCreateRequest,
+    MockFilter,
+    MockSource,
+    MockUpdateRequest,
+    PathPatternType,
+    QueryParamMatch,
+    ResponseBody,
+    ResponseBodyType,
     // Response configuration
     ResponseConfig,
-    // Mock configuration
-    MockConfiguration, MockFilter, MockCreateRequest, MockUpdateRequest,
+    SyncMessage,
     // Sync types
-    SyncStatus, SyncMessage, ConflictResolution,
-    // Additional types needed
-    BodyMatchType, ResponseBody, ResponseBodyType,
-    HeaderMatch, QueryParamMatch, BodyMatch, MatchType, PathPatternType,
-    TemplateVarSource, TemplateVar,
+    SyncStatus,
+    TemplateVar,
+    TemplateVarSource,
+    VersionVector,
 };
 
 // Additional request types specific to mystiproxy

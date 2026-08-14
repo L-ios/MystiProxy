@@ -48,10 +48,16 @@ pub trait MockRepository: Send + Sync {
     async fn find_modified_since(&self, since: DateTime<Utc>) -> Result<Vec<MockConfiguration>>;
 
     /// Batch create mock configurations
-    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>>;
+    async fn batch_create(
+        &self,
+        requests: Vec<CreateMockRequest>,
+    ) -> Result<Vec<MockConfiguration>>;
 
     /// Batch update mock configurations
-    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>>;
+    async fn batch_update(
+        &self,
+        updates: Vec<(Uuid, UpdateMockRequest)>,
+    ) -> Result<Vec<MockConfiguration>>;
 
     /// Batch delete mock configurations
     async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64>;
@@ -68,7 +74,7 @@ impl LocalMockRepository {
     pub fn new(pool: SqlitePool, instance_id: Uuid) -> Self {
         Self { pool, instance_id }
     }
-    
+
     /// Get the pool
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
@@ -129,17 +135,17 @@ impl LocalMockRepository {
             name: row.try_get("name")?,
             path: row.try_get("path")?,
             method,
-            team_id: None,  // Local storage doesn't track team
-            environment_id: None,  // Local storage doesn't track environment
+            team_id: None,        // Local storage doesn't track team
+            environment_id: None, // Local storage doesn't track environment
             matching_rules,
             response_config,
-            state_config: None,  // Local storage doesn't use state config
+            state_config: None, // Local storage doesn't use state config
             source,
             version_vector,
             content_hash: row.try_get("content_hash")?,
             created_at,
             updated_at,
-            created_by: None,  // Local storage doesn't track creator
+            created_by: None, // Local storage doesn't track creator
             is_active: is_active != 0,
         })
     }
@@ -149,13 +155,11 @@ impl LocalMockRepository {
 impl MockRepository for LocalMockRepository {
     async fn find_by_id(&self, id: Uuid) -> Result<Option<MockConfiguration>> {
         let id_str = id.to_string();
-        
-        let row = sqlx::query(
-            "SELECT * FROM mock_configurations WHERE id = ?"
-        )
-        .bind(&id_str)
-        .fetch_optional(&self.pool)
-        .await?;
+
+        let row = sqlx::query("SELECT * FROM mock_configurations WHERE id = ?")
+            .bind(&id_str)
+            .fetch_optional(&self.pool)
+            .await?;
 
         match row {
             Some(row) => Ok(Some(Self::row_to_config(&row)?)),
@@ -184,10 +188,13 @@ impl MockRepository for LocalMockRepository {
 
         if let Some(source) = &filter.source {
             query.push_str(" AND source = ?");
-            bindings.push(match source {
-                MockSource::Central => "central",
-                MockSource::Local => "local",
-            }.to_string());
+            bindings.push(
+                match source {
+                    MockSource::Central => "central",
+                    MockSource::Local => "local",
+                }
+                .to_string(),
+            );
         }
 
         query.push_str(" ORDER BY updated_at DESC");
@@ -207,9 +214,7 @@ impl MockRepository for LocalMockRepository {
 
         let rows = sql_query.fetch_all(&self.pool).await?;
 
-        rows.iter()
-            .map(|row| Self::row_to_config(row))
-            .collect()
+        rows.iter().map(|row| Self::row_to_config(row)).collect()
     }
 
     async fn find_by_path_method(
@@ -218,20 +223,18 @@ impl MockRepository for LocalMockRepository {
         method: HttpMethod,
     ) -> Result<Vec<MockConfiguration>> {
         let method_str = method.to_string();
-        
+
         let rows = sqlx::query(
             "SELECT * FROM mock_configurations 
              WHERE path = ? AND method = ? AND is_active = 1
-             ORDER BY updated_at DESC"
+             ORDER BY updated_at DESC",
         )
         .bind(path)
         .bind(&method_str)
         .fetch_all(&self.pool)
         .await?;
 
-        rows.iter()
-            .map(|row| Self::row_to_config(row))
-            .collect()
+        rows.iter().map(|row| Self::row_to_config(row)).collect()
     }
 
     async fn save(&self, config: &MockConfiguration) -> Result<()> {
@@ -287,7 +290,7 @@ impl MockRepository for LocalMockRepository {
 
     async fn delete(&self, id: Uuid) -> Result<bool> {
         let id_str = id.to_string();
-        
+
         let result = sqlx::query("DELETE FROM mock_configurations WHERE id = ?")
             .bind(&id_str)
             .execute(&self.pool)
@@ -305,11 +308,10 @@ impl MockRepository for LocalMockRepository {
     }
 
     async fn get_all_hashes(&self) -> Result<Vec<(Uuid, String)>> {
-        let rows = sqlx::query(
-            "SELECT id, content_hash FROM mock_configurations WHERE is_active = 1"
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows =
+            sqlx::query("SELECT id, content_hash FROM mock_configurations WHERE is_active = 1")
+                .fetch_all(&self.pool)
+                .await?;
 
         rows.iter()
             .map(|row| {
@@ -324,51 +326,55 @@ impl MockRepository for LocalMockRepository {
 
     async fn find_modified_since(&self, since: DateTime<Utc>) -> Result<Vec<MockConfiguration>> {
         let since_str = since.to_rfc3339();
-        
+
         let rows = sqlx::query(
-            "SELECT * FROM mock_configurations WHERE updated_at > ? ORDER BY updated_at ASC"
+            "SELECT * FROM mock_configurations WHERE updated_at > ? ORDER BY updated_at ASC",
         )
         .bind(&since_str)
         .fetch_all(&self.pool)
         .await?;
 
-        rows.iter()
-            .map(|row| Self::row_to_config(row))
-            .collect()
+        rows.iter().map(|row| Self::row_to_config(row)).collect()
     }
 
-    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>> {
+    async fn batch_create(
+        &self,
+        requests: Vec<CreateMockRequest>,
+    ) -> Result<Vec<MockConfiguration>> {
         let mut configs = Vec::with_capacity(requests.len());
-        
+
         for request in requests {
             let config = self.create(request).await?;
             configs.push(config);
         }
-        
+
         Ok(configs)
     }
 
-    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>> {
+    async fn batch_update(
+        &self,
+        updates: Vec<(Uuid, UpdateMockRequest)>,
+    ) -> Result<Vec<MockConfiguration>> {
         let mut configs = Vec::with_capacity(updates.len());
-        
+
         for (id, request) in updates {
             let config = self.update(id, request).await?;
             configs.push(config);
         }
-        
+
         Ok(configs)
     }
 
     async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64> {
         let mut count = 0;
-        
+
         for id in ids {
             let deleted = self.delete(id).await?;
             if deleted {
                 count += 1;
             }
         }
-        
+
         Ok(count)
     }
 }
@@ -530,10 +536,13 @@ impl MockRepository for InMemoryMockRepository {
         Ok(result)
     }
 
-    async fn batch_create(&self, requests: Vec<CreateMockRequest>) -> Result<Vec<MockConfiguration>> {
+    async fn batch_create(
+        &self,
+        requests: Vec<CreateMockRequest>,
+    ) -> Result<Vec<MockConfiguration>> {
         let mut configs = Vec::with_capacity(requests.len());
         let mut write_guard = self.configs.write().unwrap();
-        
+
         for request in requests {
             let mut config = MockConfiguration::new(
                 request.name,
@@ -544,18 +553,21 @@ impl MockRepository for InMemoryMockRepository {
             );
             config.is_active = request.is_active;
             config.touch(self.instance_id);
-            
+
             write_guard.insert(config.id, config.clone());
             configs.push(config);
         }
-        
+
         Ok(configs)
     }
 
-    async fn batch_update(&self, updates: Vec<(Uuid, UpdateMockRequest)>) -> Result<Vec<MockConfiguration>> {
+    async fn batch_update(
+        &self,
+        updates: Vec<(Uuid, UpdateMockRequest)>,
+    ) -> Result<Vec<MockConfiguration>> {
         let mut configs = Vec::with_capacity(updates.len());
         let mut write_guard = self.configs.write().unwrap();
-        
+
         for (id, request) in updates {
             if let Some(mut config) = write_guard.get_mut(&id) {
                 if let Some(name) = request.name {
@@ -576,25 +588,25 @@ impl MockRepository for InMemoryMockRepository {
                 if let Some(is_active) = request.is_active {
                     config.is_active = is_active;
                 }
-                
+
                 config.touch(self.instance_id);
                 configs.push(config.clone());
             }
         }
-        
+
         Ok(configs)
     }
 
     async fn batch_delete(&self, ids: Vec<Uuid>) -> Result<u64> {
         let mut count = 0;
         let mut write_guard = self.configs.write().unwrap();
-        
+
         for id in ids {
             if write_guard.remove(&id).is_some() {
                 count += 1;
             }
         }
-        
+
         Ok(count)
     }
 }
@@ -690,10 +702,16 @@ mod tests {
 
         repo.create(request).await.unwrap();
 
-        let found = repo.find_by_path_method("/api/test", HttpMethod::Get).await.unwrap();
+        let found = repo
+            .find_by_path_method("/api/test", HttpMethod::Get)
+            .await
+            .unwrap();
         assert_eq!(found.len(), 1);
 
-        let not_found = repo.find_by_path_method("/api/test", HttpMethod::Post).await.unwrap();
+        let not_found = repo
+            .find_by_path_method("/api/test", HttpMethod::Post)
+            .await
+            .unwrap();
         assert!(not_found.is_empty());
     }
 }

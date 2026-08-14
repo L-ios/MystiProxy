@@ -7,8 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
 use http_body_util::combinators::BoxBody;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::client::conn::http1::{Builder, SendRequest};
 use hyper::{Request, Response};
@@ -25,7 +25,9 @@ fn extract_host_from_target(target: &str) -> Option<String> {
         return Some("localhost".to_string());
     }
     let addr = target.strip_prefix("tcp://").unwrap_or(target);
-    if addr.is_empty() { return None; }
+    if addr.is_empty() {
+        return None;
+    }
     Some(addr.to_string())
 }
 
@@ -46,8 +48,16 @@ pub struct HttpClient {
 }
 
 impl HttpClient {
-    pub fn new(target: String, timeout: Option<Duration>, upstream_config: Option<UpstreamProxyConfig>) -> Self {
-        Self { target, timeout, upstream_config }
+    pub fn new(
+        target: String,
+        timeout: Option<Duration>,
+        upstream_config: Option<UpstreamProxyConfig>,
+    ) -> Self {
+        Self {
+            target,
+            timeout,
+            upstream_config,
+        }
     }
 
     async fn establish_connection(&self) -> Result<SendRequest<BoxBody<Bytes, Infallible>>> {
@@ -95,7 +105,9 @@ impl HttpClient {
             .title_case_headers(true)
             .handshake(io)
             .await
-            .map_err(|e| MystiProxyError::Proxy(format!("Failed to establish upstream connection: {e}")))?;
+            .map_err(|e| {
+                MystiProxyError::Proxy(format!("Failed to establish upstream connection: {e}"))
+            })?;
 
         tokio::spawn(async move {
             if let Err(err) = conn.await {
@@ -103,7 +115,10 @@ impl HttpClient {
             }
         });
 
-        debug!("Successfully connected to {} via upstream proxy", self.target);
+        debug!(
+            "Successfully connected to {} via upstream proxy",
+            self.target
+        );
         Ok(sender)
     }
 
@@ -113,7 +128,12 @@ impl HttpClient {
     }
 
     pub async fn send_boxed(&self, request: RequestBoxBody) -> Result<Response<Incoming>> {
-        debug!("Sending request to {}: {} {}", self.target, request.method(), request.uri());
+        debug!(
+            "Sending request to {}: {} {}",
+            self.target,
+            request.method(),
+            request.uri()
+        );
 
         let mut sender = self.establish_connection().await?;
 
@@ -123,15 +143,26 @@ impl HttpClient {
                 .map_err(|_| MystiProxyError::Timeout)?
                 .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
         } else {
-            sender.send_request(request).await
+            sender
+                .send_request(request)
+                .await
                 .map_err(|e| MystiProxyError::Proxy(format!("Failed to send request: {e}")))?
         };
 
-        info!("Received response: {} from {}", response.status(), self.target);
+        info!(
+            "Received response: {} from {}",
+            response.status(),
+            self.target
+        );
         Ok(response)
     }
 
-    fn rewrite_uri_and_headers(&self, method: hyper::http::Method, uri: &hyper::Uri, headers: &hyper::header::HeaderMap) -> Result<hyper::http::request::Builder> {
+    fn rewrite_uri_and_headers(
+        &self,
+        method: hyper::http::Method,
+        uri: &hyper::Uri,
+        headers: &hyper::header::HeaderMap,
+    ) -> Result<hyper::http::request::Builder> {
         let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
         let new_uri = hyper::http::Uri::builder()
             .path_and_query(path_and_query)
@@ -141,7 +172,9 @@ impl HttpClient {
         let mut builder = Request::builder().method(method).uri(new_uri);
         let mut has_host = false;
         for (name, value) in headers {
-            if name == "host" { has_host = true; }
+            if name == "host" {
+                has_host = true;
+            }
             builder = builder.header(name, value);
         }
         if !has_host {
@@ -152,11 +185,20 @@ impl HttpClient {
         Ok(builder)
     }
 
-    pub async fn convert_incoming_request_async(&self, request: Request<Incoming>) -> Result<RequestBoxBody> {
+    pub async fn convert_incoming_request_async(
+        &self,
+        request: Request<Incoming>,
+    ) -> Result<RequestBoxBody> {
         let (parts, body) = request.into_parts();
         let builder = self.rewrite_uri_and_headers(parts.method, &parts.uri, &parts.headers)?;
-        let body_bytes = body.collect().await.map_err(|e| MystiProxyError::Hyper(e.to_string()))?.to_bytes();
-        let boxed = Full::new(body_bytes).map_err(|never| match never {}).boxed();
+        let body_bytes = body
+            .collect()
+            .await
+            .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+            .to_bytes();
+        let boxed = Full::new(body_bytes)
+            .map_err(|never| match never {})
+            .boxed();
         builder.body(boxed).map_err(MystiProxyError::Http)
     }
 
@@ -168,7 +210,9 @@ impl HttpClient {
         body_bytes: Bytes,
     ) -> Result<RequestBoxBody> {
         let builder = self.rewrite_uri_and_headers(method, &uri, &headers)?;
-        let boxed = Full::new(body_bytes).map_err(|never| match never {}).boxed();
+        let boxed = Full::new(body_bytes)
+            .map_err(|never| match never {})
+            .boxed();
         builder.body(boxed).map_err(MystiProxyError::Http)
     }
 
@@ -183,10 +227,16 @@ pub struct HttpClientPool {
 
 impl HttpClientPool {
     pub fn new() -> Self {
-        Self { clients: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            clients: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
-    pub async fn get_or_create(&self, target: String, timeout: Option<Duration>) -> Arc<HttpClient> {
+    pub async fn get_or_create(
+        &self,
+        target: String,
+        timeout: Option<Duration>,
+    ) -> Arc<HttpClient> {
         let mut clients = self.clients.lock().await;
         for client in clients.iter() {
             if client.target() == target {
@@ -207,7 +257,9 @@ impl HttpClientPool {
 }
 
 impl Default for HttpClientPool {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -222,12 +274,18 @@ mod tests {
 
     #[test]
     fn test_extract_host_tcp() {
-        assert_eq!(extract_host_from_target("tcp://127.0.0.1:8080"), Some("127.0.0.1:8080".to_string()));
+        assert_eq!(
+            extract_host_from_target("tcp://127.0.0.1:8080"),
+            Some("127.0.0.1:8080".to_string())
+        );
     }
 
     #[test]
     fn test_extract_host_unix() {
-        assert_eq!(extract_host_from_target("unix:///var/run/docker.sock"), Some("localhost".to_string()));
+        assert_eq!(
+            extract_host_from_target("unix:///var/run/docker.sock"),
+            Some("localhost".to_string())
+        );
     }
 
     #[test]

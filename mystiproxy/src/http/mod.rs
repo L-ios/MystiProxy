@@ -20,15 +20,14 @@ use hyper::body::{Bytes, Incoming};
 // 重导出公共接口
 pub use auth::{AuthConfig, AuthResult, AuthType, Authenticator, Claims};
 pub use body::{read_json_body, write_json_body, BodyTransformer};
-pub use header::HeaderTransformer;
 pub use client::{HttpClient, HttpClientPool};
 pub use handler::{create_handler, BoxBody, HttpRequestHandler, RouteMatch};
+pub use header::HeaderTransformer;
 pub use ntlm::{NtlmAuthenticator, NtlmConfig, NtlmVersion, Type2Message};
-pub use proxy::{
-    HttpProxyAcceptor, HttpProxyConfig, HttpProxyService, ProxyAuthConfig,
-};
+pub use proxy::{HttpProxyAcceptor, HttpProxyConfig, HttpProxyService, ProxyAuthConfig};
 pub use server::{
-    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService as SimpleHttpProxyService, HttpServer, HttpServerConfig,
+    create_simple_server, BoxBody as ServerBoxBody, HttpProxyService as SimpleHttpProxyService,
+    HttpServer, HttpServerConfig,
 };
 pub use static_files::{StaticFileConfig, StaticFileService};
 pub use upstream::{

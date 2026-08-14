@@ -1,5 +1,5 @@
 //! HTTP 服务器模块
-//! 
+//!
 //! 提供 HTTP 服务器功能，支持 TCP 和 UDS 监听
 
 use std::convert::Infallible;
@@ -74,17 +74,23 @@ where
     }
 
     /// 创建新的 HTTP 服务器（带 TLS 配置）
-    pub fn new_with_tls(config: HttpServerConfig, service: S, tls_config: &crate::config::TlsConfig) -> Result<Self> {
+    pub fn new_with_tls(
+        config: HttpServerConfig,
+        service: S,
+        tls_config: &crate::config::TlsConfig,
+    ) -> Result<Self> {
         let tls_module_config = TlsModuleConfig::from_pem_files(
             std::path::Path::new(&tls_config.cert_path),
-            std::path::Path::new(&tls_config.key_path)
+            std::path::Path::new(&tls_config.key_path),
         )?;
 
         let tls_module_config = if tls_config.mutual_auth {
             if let Some(client_ca_path) = &tls_config.client_ca_path {
                 tls_module_config.with_client_ca(std::path::Path::new(client_ca_path))?
             } else {
-                return Err(MystiProxyError::Tls("Mutual auth enabled but no client CA path provided".to_string()));
+                return Err(MystiProxyError::Tls(
+                    "Mutual auth enabled but no client CA path provided".to_string(),
+                ));
             }
         } else {
             tls_module_config
@@ -132,7 +138,9 @@ where
 
                     // 为每个连接创建新任务
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_connection(stream, service, timeout, tls_server).await {
+                        if let Err(e) =
+                            Self::handle_connection(stream, service, timeout, tls_server).await
+                        {
                             error!("Connection error: {}", e);
                         }
                     });
@@ -177,8 +185,7 @@ where
         if let Some(duration) = timeout {
             match tokio::time::timeout(duration, conn).await {
                 Ok(result) => {
-                    result
-                        .map_err(|e| MystiProxyError::Proxy(format!("Connection error: {e}")))?;
+                    result.map_err(|e| MystiProxyError::Proxy(format!("Connection error: {e}")))?;
                 }
                 Err(_) => {
                     warn!("Connection timed out after {:?}", duration);

@@ -299,7 +299,10 @@ where
 }
 
 /// 自定义 Duration 序列化函数（支持 Option<Duration>）
-fn serialize_option_duration<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_option_duration<S>(
+    duration: &Option<Duration>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {

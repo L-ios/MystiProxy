@@ -15,17 +15,17 @@ const SCHEMA_VERSION: i32 = 1;
 /// Create a new SQLite connection pool
 pub async fn create_pool(db_path: &Path) -> Result<SqlitePool> {
     let db_url = format!("sqlite:{}?mode=rwc", db_path.display());
-    
+
     info!("Connecting to SQLite database: {}", db_path.display());
-    
+
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
         .await?;
-    
+
     // Run migrations
     run_migrations(&pool).await?;
-    
+
     Ok(pool)
 }
 
@@ -35,16 +35,16 @@ pub async fn create_memory_pool() -> Result<SqlitePool> {
         .max_connections(1)
         .connect("sqlite::memory:")
         .await?;
-    
+
     run_migrations(&pool).await?;
-    
+
     Ok(pool)
 }
 
 /// Run database migrations
 async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     info!("Running database migrations...");
-    
+
     // Create schema_version table if not exists
     pool.execute(
         r#"
@@ -55,33 +55,38 @@ async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         "#,
     )
     .await?;
-    
+
     // Get current version
-    let current_version: Option<i32> = sqlx::query_scalar(
-        "SELECT MAX(version) FROM schema_version",
-    )
-    .fetch_optional(pool)
-    .await?
-    .flatten();
-    
+    let current_version: Option<i32> =
+        sqlx::query_scalar("SELECT MAX(version) FROM schema_version")
+            .fetch_optional(pool)
+            .await?
+            .flatten();
+
     let current_version = current_version.unwrap_or(0);
-    
+
     if current_version < SCHEMA_VERSION {
-        info!("Migrating database from version {} to {}", current_version, SCHEMA_VERSION);
-        
+        info!(
+            "Migrating database from version {} to {}",
+            current_version, SCHEMA_VERSION
+        );
+
         // Run migrations in order
         for version in (current_version + 1)..=SCHEMA_VERSION {
             migrate_to_version(pool, version).await?;
-            
+
             sqlx::query("INSERT INTO schema_version (version) VALUES (?)")
                 .bind(version)
                 .execute(pool)
                 .await?;
         }
     } else {
-        info!("Database schema is up to date (version {})", current_version);
+        info!(
+            "Database schema is up to date (version {})",
+            current_version
+        );
     }
-    
+
     Ok(())
 }
 
@@ -99,7 +104,7 @@ async fn migrate_to_version(pool: &SqlitePool, version: i32) -> Result<()> {
 /// Migration to version 1: Initial schema
 async fn migrate_v1(pool: &SqlitePool) -> Result<()> {
     info!("Applying migration v1: Initial schema");
-    
+
     pool.execute(
         r#"
         -- Mock configurations table
@@ -167,42 +172,40 @@ async fn migrate_v1(pool: &SqlitePool) -> Result<()> {
         "#,
     )
     .await?;
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_create_memory_pool() {
         let pool = create_memory_pool().await.unwrap();
-        
+
         // Verify tables exist
         let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mock_configurations'"
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mock_configurations'",
         )
         .fetch_one(&pool)
         .await
         .unwrap();
-        
+
         assert_eq!(count, 1);
     }
-    
+
     #[tokio::test]
     async fn test_schema_version() {
         let pool = create_memory_pool().await.unwrap();
-        
-        let version: Option<i64> = sqlx::query_scalar(
-            "SELECT MAX(version) FROM schema_version"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        
+
+        let version: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM schema_version")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
         let version = version.unwrap_or(0) as i32;
-        
+
         assert_eq!(version, SCHEMA_VERSION);
     }
 }

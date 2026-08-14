@@ -50,10 +50,7 @@ pub enum ManagementError {
 
     /// Conflict detected
     #[error("Conflict detected for config {id}: {message}")]
-    Conflict {
-        id: uuid::Uuid,
-        message: String,
-    },
+    Conflict { id: uuid::Uuid, message: String },
 
     /// Internal error
     #[error("Internal error: {0}")]

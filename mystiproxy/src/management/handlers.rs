@@ -6,9 +6,8 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -17,9 +16,7 @@ use uuid::Uuid;
 use super::error::ManagementError;
 
 type Result<T, E = ApiError> = std::result::Result<T, E>;
-use super::models::{
-    CreateMockRequest, MockConfiguration, MockFilter, UpdateMockRequest,
-};
+use super::models::{CreateMockRequest, MockConfiguration, MockFilter, UpdateMockRequest};
 use super::repository::{LocalMockRepository, MockRepository};
 
 /// API response wrapper
@@ -89,8 +86,8 @@ pub struct ListQuery {
 impl From<ListQuery> for MockFilter {
     fn from(query: ListQuery) -> Self {
         Self {
-            environment: None,  // Local management doesn't filter by environment
-            team: None,  // Local management doesn't filter by team
+            environment: None, // Local management doesn't filter by environment
+            team: None,        // Local management doesn't filter by team
             path: query.path,
             method: query.method.and_then(|m| m.parse().ok()),
             is_active: query.is_active,
@@ -99,7 +96,7 @@ impl From<ListQuery> for MockFilter {
                 "local" => Some(super::models::MockSource::Local),
                 _ => None,
             }),
-            page: None,  // Will use default
+            page: None, // Will use default
             limit: query.limit,
             offset: query.offset,
         }
@@ -127,9 +124,14 @@ impl HandlerState {
             status: "local".to_string(),
         }
     }
-    
+
     /// Create state with sync information
-    pub fn with_sync(repository: LocalMockRepository, sync_enabled: bool, last_sync: Option<String>, status: String) -> Self {
+    pub fn with_sync(
+        repository: LocalMockRepository,
+        sync_enabled: bool,
+        last_sync: Option<String>,
+        status: String,
+    ) -> Self {
         Self {
             repository: Arc::new(repository),
             sync_enabled,
@@ -144,7 +146,7 @@ impl HandlerState {
 // ============================================================================
 
 /// List all mock configurations
-/// 
+///
 /// GET /api/v1/mocks
 pub async fn list_mocks(
     State(state): State<HandlerState>,
@@ -153,12 +155,12 @@ pub async fn list_mocks(
     let filter: MockFilter = query.into();
     let items = state.repository.find_all(filter).await?;
     let total = state.repository.count().await?;
-    
+
     Ok(Json(ApiResponse::success(ListResponse { items, total })))
 }
 
 /// Get a single mock configuration by ID
-/// 
+///
 /// GET /api/v1/mocks/:id
 pub async fn get_mock(
     State(state): State<HandlerState>,
@@ -169,12 +171,12 @@ pub async fn get_mock(
         .find_by_id(id)
         .await?
         .ok_or_else(|| ManagementError::not_found(id))?;
-    
+
     Ok(Json(ApiResponse::success(config)))
 }
 
 /// Create a new mock configuration
-/// 
+///
 /// POST /api/v1/mocks
 pub async fn create_mock(
     State(state): State<HandlerState>,
@@ -190,14 +192,14 @@ pub async fn create_mock(
     if !request.path.starts_with('/') {
         return Err(ApiError::Validation("Path must start with '/'".to_string()));
     }
-    
+
     let config = state.repository.create(request).await?;
-    
+
     Ok((StatusCode::CREATED, Json(ApiResponse::success(config))))
 }
 
 /// Update an existing mock configuration
-/// 
+///
 /// PUT /api/v1/mocks/:id
 pub async fn update_mock(
     State(state): State<HandlerState>,
@@ -213,21 +215,21 @@ pub async fn update_mock(
             return Err(ApiError::Validation("Path must start with '/'".to_string()));
         }
     }
-    
+
     let config = state.repository.update(id, request).await?;
-    
+
     Ok(Json(ApiResponse::success(config)))
 }
 
 /// Delete a mock configuration
-/// 
+///
 /// DELETE /api/v1/mocks/:id
 pub async fn delete_mock(
     State(state): State<HandlerState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
     let deleted = state.repository.delete(id).await?;
-    
+
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -236,7 +238,7 @@ pub async fn delete_mock(
 }
 
 /// Batch create mock configurations
-/// 
+///
 /// POST /api/v1/mocks/batch
 pub async fn batch_create_mocks(
     State(state): State<HandlerState>,
@@ -245,23 +247,32 @@ pub async fn batch_create_mocks(
     // Validate requests
     for (i, request) in requests.iter().enumerate() {
         if request.name.is_empty() {
-            return Err(ApiError::Validation(format!("Name is required for request #{}", i)));
+            return Err(ApiError::Validation(format!(
+                "Name is required for request #{}",
+                i
+            )));
         }
         if request.path.is_empty() {
-            return Err(ApiError::Validation(format!("Path is required for request #{}", i)));
+            return Err(ApiError::Validation(format!(
+                "Path is required for request #{}",
+                i
+            )));
         }
         if !request.path.starts_with('/') {
-            return Err(ApiError::Validation(format!("Path must start with '/' for request #{}", i)));
+            return Err(ApiError::Validation(format!(
+                "Path must start with '/' for request #{}",
+                i
+            )));
         }
     }
-    
+
     let configs = state.repository.batch_create(requests).await?;
-    
+
     Ok((StatusCode::CREATED, Json(ApiResponse::success(configs))))
 }
 
 /// Batch update mock configurations
-/// 
+///
 /// PUT /api/v1/mocks/batch
 pub async fn batch_update_mocks(
     State(state): State<HandlerState>,
@@ -271,46 +282,54 @@ pub async fn batch_update_mocks(
     for (i, (_, request)) in updates.iter().enumerate() {
         if let Some(ref path) = request.path {
             if path.is_empty() {
-                return Err(ApiError::Validation(format!("Path cannot be empty for request #{}", i)));
+                return Err(ApiError::Validation(format!(
+                    "Path cannot be empty for request #{}",
+                    i
+                )));
             }
             if !path.starts_with('/') {
-                return Err(ApiError::Validation(format!("Path must start with '/' for request #{}", i)));
+                return Err(ApiError::Validation(format!(
+                    "Path must start with '/' for request #{}",
+                    i
+                )));
             }
         }
     }
-    
+
     let configs = state.repository.batch_update(updates).await?;
-    
+
     Ok(Json(ApiResponse::success(configs)))
 }
 
 /// Batch delete mock configurations
-/// 
+///
 /// DELETE /api/v1/mocks/batch
 pub async fn batch_delete_mocks(
     State(state): State<HandlerState>,
     Json(ids): Json<Vec<Uuid>>,
 ) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
     let deleted_count = state.repository.batch_delete(ids).await?;
-    
-    Ok(Json(ApiResponse::success(serde_json::json!({"deleted_count": deleted_count}))))
+
+    Ok(Json(ApiResponse::success(
+        serde_json::json!({"deleted_count": deleted_count}),
+    )))
 }
 
 /// Health check endpoint
-/// 
+///
 /// GET /api/v1/health
 pub async fn health_check() -> Json<ApiResponse<()>> {
     Json(ApiResponse::<()>::success_message("OK"))
 }
 
 /// Get sync status
-/// 
+///
 /// GET /api/v1/sync/status
 pub async fn get_sync_status(
     State(state): State<HandlerState>,
 ) -> Json<ApiResponse<SyncStatusResponse>> {
     let count = state.repository.count().await.ok().unwrap_or(0);
-    
+
     Json(ApiResponse::success(SyncStatusResponse {
         total_configs: count,
         sync_enabled: state.sync_enabled,
@@ -320,7 +339,7 @@ pub async fn get_sync_status(
 }
 
 /// Trigger manual sync
-/// 
+///
 /// POST /api/v1/sync/trigger
 pub async fn trigger_sync(
     State(state): State<HandlerState>,
@@ -328,7 +347,7 @@ pub async fn trigger_sync(
     // This would trigger the sync client to perform a sync
     // For now, return a placeholder response
     let count = state.repository.count().await?;
-    
+
     Ok(Json(ApiResponse::success(SyncStatusResponse {
         total_configs: count,
         sync_enabled: state.sync_enabled,
@@ -377,7 +396,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::Validation(msg) => (StatusCode::BAD_REQUEST, msg),
         };
-        
+
         let (_, error_response) = ApiResponse::<()>::error(status, &message);
         (status, Json(error_response)).into_response()
     }
@@ -392,8 +411,16 @@ pub fn create_management_router(state: HandlerState) -> Router {
     Router::new()
         .route("/api/v1/health", get(health_check))
         .route("/api/v1/mocks", get(list_mocks).post(create_mock))
-        .route("/api/v1/mocks/:id", get(get_mock).put(update_mock).delete(delete_mock))
-        .route("/api/v1/mocks/batch", post(batch_create_mocks).put(batch_update_mocks).delete(batch_delete_mocks))
+        .route(
+            "/api/v1/mocks/:id",
+            get(get_mock).put(update_mock).delete(delete_mock),
+        )
+        .route(
+            "/api/v1/mocks/batch",
+            post(batch_create_mocks)
+                .put(batch_update_mocks)
+                .delete(batch_delete_mocks),
+        )
         .route("/api/v1/sync/status", get(get_sync_status))
         .route("/api/v1/sync/trigger", post(trigger_sync))
         .with_state(state)
@@ -453,7 +480,7 @@ mod tests {
     #[tokio::test]
     async fn test_list_mocks() {
         let state = create_test_state().await;
-        
+
         // Create a mock first
         state
             .repository

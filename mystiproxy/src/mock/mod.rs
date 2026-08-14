@@ -185,8 +185,7 @@ impl MockBuilder {
     /// - 正则匹配: `key=regex:pattern`
     fn matches_query(uri: &str, pattern: &str) -> bool {
         // 解析 URI，提取查询参数
-        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{uri}"))
-        {
+        let query_string = if let Ok(parsed) = url::Url::parse(&format!("http://localhost{uri}")) {
             parsed.query().unwrap_or("").to_string()
         } else {
             // 尝试从 URI 中提取查询部分

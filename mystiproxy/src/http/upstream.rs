@@ -141,7 +141,9 @@ impl UpstreamProxyConfig {
                 .map_err(|e| MystiProxyError::Config(format!("Invalid port: {e}")))?;
             (host.to_string(), port)
         } else {
-            return Err(MystiProxyError::Config("Missing port in proxy URL".to_string()));
+            return Err(MystiProxyError::Config(
+                "Missing port in proxy URL".to_string(),
+            ));
         };
 
         Ok(Self {
@@ -238,13 +240,12 @@ impl UpstreamProxyConnector {
         let addr = self.config.proxy_addr();
         log_debug!("Connecting to upstream proxy: {}", addr);
 
-        let stream = tokio::time::timeout(
-            self.config.connect_timeout,
-            TcpStream::connect(&addr),
-        )
-        .await
-        .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to upstream {addr}: {e}")))?;
+        let stream = tokio::time::timeout(self.config.connect_timeout, TcpStream::connect(&addr))
+            .await
+            .map_err(|_| MystiProxyError::Timeout)?
+            .map_err(|e| {
+                MystiProxyError::Proxy(format!("Failed to connect to upstream {addr}: {e}"))
+            })?;
 
         log_debug!("Connected to upstream proxy: {}", addr);
         Ok(stream)
@@ -262,7 +263,9 @@ impl UpstreamProxyConnector {
             stream
         };
 
-        let connect_line = format!("CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n");
+        let connect_line = format!(
+            "CONNECT {target_host}:{target_port} HTTP/1.1\r\nHost: {target_host}:{target_port}\r\n"
+        );
 
         if let Some(ref ntlm_cfg) = self.config.ntlm_config {
             let authenticator = NtlmAuthenticator::new(ntlm_cfg.clone());
@@ -271,7 +274,10 @@ impl UpstreamProxyConnector {
             log_debug!("NTLM Type1 for CONNECT {}:{}", target_host, target_port);
 
             let req = format!("{connect_line}Proxy-Authorization: NTLM {type1}\r\n\r\n");
-            stream.write_all(req.as_bytes()).await.map_err(MystiProxyError::Io)?;
+            stream
+                .write_all(req.as_bytes())
+                .await
+                .map_err(MystiProxyError::Io)?;
 
             let mut buf = vec![0u8; 8192];
             let n = stream.read(&mut buf).await.map_err(MystiProxyError::Io)?;
@@ -279,15 +285,22 @@ impl UpstreamProxyConnector {
             let first_line = resp.lines().next().unwrap_or("");
 
             if first_line.contains("200") {
-                log_info!("NTLM CONNECT tunnel established (no challenge): {}:{}", target_host, target_port);
+                log_info!(
+                    "NTLM CONNECT tunnel established (no challenge): {}:{}",
+                    target_host,
+                    target_port
+                );
                 return Ok(stream);
             }
 
             if !first_line.contains("407") {
-                return Err(MystiProxyError::Proxy(format!("Expected 407 NTLM challenge, got: {first_line}")));
+                return Err(MystiProxyError::Proxy(format!(
+                    "Expected 407 NTLM challenge, got: {first_line}"
+                )));
             }
 
-            let challenge = resp.lines()
+            let challenge = resp
+                .lines()
                 .skip(1)
                 .find_map(|line| {
                     let lower = line.to_lowercase();
@@ -297,14 +310,19 @@ impl UpstreamProxyConnector {
                         None
                     }
                 })
-                .ok_or_else(|| MystiProxyError::Proxy("No NTLM challenge in 407 response".to_string()))?;
+                .ok_or_else(|| {
+                    MystiProxyError::Proxy("No NTLM challenge in 407 response".to_string())
+                })?;
 
             let type2 = authenticator.parse_type2_message(&challenge)?;
             let type3 = authenticator.create_type3_message(&type2);
             log_debug!("NTLM Type3 for CONNECT {}:{}", target_host, target_port);
 
             let req = format!("{connect_line}Proxy-Authorization: NTLM {type3}\r\n\r\n");
-            stream.write_all(req.as_bytes()).await.map_err(MystiProxyError::Io)?;
+            stream
+                .write_all(req.as_bytes())
+                .await
+                .map_err(MystiProxyError::Io)?;
 
             let mut buf = vec![0u8; 4096];
             let n = stream.read(&mut buf).await.map_err(MystiProxyError::Io)?;
@@ -312,12 +330,18 @@ impl UpstreamProxyConnector {
             let first_line = resp.lines().next().unwrap_or("");
 
             if first_line.contains("200") {
-                log_info!("NTLM CONNECT tunnel established: {}:{} via upstream {}",
-                    target_host, target_port, self.config.proxy_addr());
+                log_info!(
+                    "NTLM CONNECT tunnel established: {}:{} via upstream {}",
+                    target_host,
+                    target_port,
+                    self.config.proxy_addr()
+                );
                 return Ok(stream);
             } else {
                 log_error!("NTLM CONNECT failed: {}", first_line);
-                return Err(MystiProxyError::Proxy(format!("NTLM CONNECT failed: {first_line}")));
+                return Err(MystiProxyError::Proxy(format!(
+                    "NTLM CONNECT failed: {first_line}"
+                )));
             }
         }
 
@@ -330,8 +354,12 @@ impl UpstreamProxyConnector {
             None => format!("{connect_line}\r\n"),
         };
 
-        log_debug!("Sending CONNECT request to upstream: {}:{} via {}",
-            target_host, target_port, self.config.proxy_addr());
+        log_debug!(
+            "Sending CONNECT request to upstream: {}:{} via {}",
+            target_host,
+            target_port,
+            self.config.proxy_addr()
+        );
 
         stream
             .write_all(connect_request.as_bytes())
@@ -348,8 +376,12 @@ impl UpstreamProxyConnector {
         let first_line = response.lines().next().unwrap_or("");
 
         if first_line.contains("200") {
-            log_info!("CONNECT tunnel established: {}:{} via upstream {}",
-                target_host, target_port, self.config.proxy_addr());
+            log_info!(
+                "CONNECT tunnel established: {}:{} via upstream {}",
+                target_host,
+                target_port,
+                self.config.proxy_addr()
+            );
             Ok(stream)
         } else {
             log_error!("CONNECT failed: {}", first_line);
@@ -396,7 +428,10 @@ impl UpstreamProxyConnector {
         // 添加上游代理认证
         if let Some(auth) = &self.config.auth {
             if !headers.contains_key("proxy-authorization") {
-                request.push_str(&format!("Proxy-Authorization: {}\r\n", auth.to_proxy_authorization()));
+                request.push_str(&format!(
+                    "Proxy-Authorization: {}\r\n",
+                    auth.to_proxy_authorization()
+                ));
             }
         }
 
@@ -410,8 +445,12 @@ impl UpstreamProxyConnector {
 
         request.push_str("\r\n");
 
-        log_debug!("Forwarding HTTP request to upstream: {} {} via {}",
-            method, path, self.config.proxy_addr());
+        log_debug!(
+            "Forwarding HTTP request to upstream: {} {} via {}",
+            method,
+            path,
+            self.config.proxy_addr()
+        );
 
         // 发送请求
         stream
@@ -420,20 +459,14 @@ impl UpstreamProxyConnector {
             .map_err(MystiProxyError::Io)?;
 
         if let Some(body) = body {
-            stream
-                .write_all(body)
-                .await
-                .map_err(MystiProxyError::Io)?;
+            stream.write_all(body).await.map_err(MystiProxyError::Io)?;
         }
 
         // 读取响应
         let mut response = Vec::new();
         let mut buf = vec![0u8; 8192];
         loop {
-            let n = stream
-                .read(&mut buf)
-                .await
-                .map_err(MystiProxyError::Io)?;
+            let n = stream.read(&mut buf).await.map_err(MystiProxyError::Io)?;
             if n == 0 {
                 break;
             }
@@ -536,11 +569,13 @@ impl ProxyConverter {
                 .map_err(MystiProxyError::Io)?;
 
             // 双向转发
-            self.bidirectional_forward(client_stream, upstream_stream).await?;
+            self.bidirectional_forward(client_stream, upstream_stream)
+                .await?;
         } else {
             // 处理普通 HTTP 请求
             let (host, port, path) = self.parse_http_target(target)?;
-            let response = self.upstream
+            let response = self
+                .upstream
                 .forward_http_request(method, &host, port, &path, &headers, None)
                 .await?;
 
@@ -569,15 +604,17 @@ impl ProxyConverter {
     /// 解析 HTTP 目标
     fn parse_http_target(&self, target: &str) -> Result<(String, u16, String)> {
         // 解析 URL
-        let url: hyper::Uri = target
-            .parse()
-            .map_err(|e: hyper::http::uri::InvalidUri| {
-                MystiProxyError::Http(hyper::http::Error::from(e))
-            })?;
+        let url: hyper::Uri = target.parse().map_err(|e: hyper::http::uri::InvalidUri| {
+            MystiProxyError::Http(hyper::http::Error::from(e))
+        })?;
 
         let host = url.host().unwrap_or("localhost").to_string();
         let port = url.port_u16().unwrap_or(80);
-        let path = url.path_and_query().map(|pq| pq.as_str()).unwrap_or("/").to_string();
+        let path = url
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/")
+            .to_string();
 
         Ok((host, port, path))
     }
@@ -641,7 +678,8 @@ mod tests {
 
     #[test]
     fn test_upstream_config_with_auth() {
-        let config = UpstreamProxyConfig::from_url("http://user:pass@proxy.example.com:8080").unwrap();
+        let config =
+            UpstreamProxyConfig::from_url("http://user:pass@proxy.example.com:8080").unwrap();
         assert_eq!(config.host, "proxy.example.com");
         assert_eq!(config.port, 8080);
         assert!(config.auth.is_some());

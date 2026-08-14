@@ -1,5 +1,5 @@
 //! WebSocket 模块
-//! 
+//!
 //! 提供 WebSocket 连接处理功能
 
 use std::convert::Infallible;
@@ -21,14 +21,20 @@ pub fn is_websocket_upgrade_request(req: &Request<hyper::body::Incoming>) -> boo
 }
 
 /// 处理 WebSocket 升级请求
-pub async fn handle_websocket_upgrade(req: Request<hyper::body::Incoming>) -> Result<Response<Empty<Infallible>>> {
+pub async fn handle_websocket_upgrade(
+    req: Request<hyper::body::Incoming>,
+) -> Result<Response<Empty<Infallible>>> {
     // 检查是否为 WebSocket 升级请求
     if !is_websocket_upgrade_request(&req) {
-        return Err(MystiProxyError::Proxy("Not a WebSocket upgrade request".to_string()));
+        return Err(MystiProxyError::Proxy(
+            "Not a WebSocket upgrade request".to_string(),
+        ));
     }
 
     // 检查是否有 Sec-WebSocket-Key 头
-    let key = req.headers().get(header::SEC_WEBSOCKET_KEY)
+    let key = req
+        .headers()
+        .get(header::SEC_WEBSOCKET_KEY)
         .ok_or_else(|| MystiProxyError::Proxy("Missing Sec-WebSocket-Key header".to_string()))?
         .to_str()
         .map_err(|e| MystiProxyError::Proxy(format!("Invalid Sec-WebSocket-Key header: {}", e)))?;
@@ -50,10 +56,10 @@ pub async fn handle_websocket_upgrade(req: Request<hyper::body::Incoming>) -> Re
 
 /// 计算 WebSocket 接受密钥
 fn compute_websocket_accept(key: &str) -> String {
-    use sha1::{Digest, Sha1};
     use base64::engine::general_purpose::STANDARD;
     use base64::Engine;
-    
+    use sha1::{Digest, Sha1};
+
     let mut hasher = Sha1::new();
     hasher.update(key);
     hasher.update("258EAFA5-E914-47DA-95CA-C5AB0DC85B11"); // WebSocket 魔术字符串

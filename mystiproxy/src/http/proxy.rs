@@ -157,7 +157,10 @@ impl ProxyAuthConfig {
     pub fn create_auth_required_response(&self) -> Response<BoxBody> {
         Response::builder()
             .status(StatusCode::PROXY_AUTHENTICATION_REQUIRED)
-            .header("Proxy-Authenticate", format!("Basic realm=\"{}\"", self.realm))
+            .header(
+                "Proxy-Authenticate",
+                format!("Basic realm=\"{}\"", self.realm),
+            )
             .header("Proxy-Connection", "close")
             .body(text_body("Proxy Authentication Required"))
             .unwrap()
@@ -294,13 +297,13 @@ impl HttpProxyService {
 
         let target_addr = format!("{host}:{port}");
 
-        let target_stream = tokio::time::timeout(
-            config.connect_timeout,
-            TcpStream::connect(&target_addr),
-        )
-        .await
-        .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Failed to connect to {target_addr}: {e}")))?;
+        let target_stream =
+            tokio::time::timeout(config.connect_timeout, TcpStream::connect(&target_addr))
+                .await
+                .map_err(|_| MystiProxyError::Timeout)?
+                .map_err(|e| {
+                    MystiProxyError::Proxy(format!("Failed to connect to {target_addr}: {e}"))
+                })?;
 
         let io = TokioIo::new(target_stream);
 
@@ -319,12 +322,13 @@ impl HttpProxyService {
 
         let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
 
-        let new_uri: Uri = path_and_query.parse()
-            .map_err(|e: hyper::http::uri::InvalidUri| MystiProxyError::Http(hyper::http::Error::from(e)))?;
+        let new_uri: Uri = path_and_query
+            .parse()
+            .map_err(|e: hyper::http::uri::InvalidUri| {
+                MystiProxyError::Http(hyper::http::Error::from(e))
+            })?;
 
-        let mut new_request = Request::builder()
-            .method(method.clone())
-            .uri(new_uri);
+        let mut new_request = Request::builder().method(method.clone()).uri(new_uri);
 
         for (name, value) in req.headers() {
             if name != "Proxy-Authorization" && name != "Proxy-Connection" {
@@ -338,13 +342,11 @@ impl HttpProxyService {
             .body(req.into_body())
             .map_err(MystiProxyError::Http)?;
 
-        let response = tokio::time::timeout(
-            config.request_timeout,
-            sender.send_request(new_request),
-        )
-        .await
-        .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {e}")))?;
+        let response =
+            tokio::time::timeout(config.request_timeout, sender.send_request(new_request))
+                .await
+                .map_err(|_| MystiProxyError::Timeout)?
+                .map_err(|e| MystiProxyError::Proxy(format!("Request failed: {e}")))?;
 
         let (parts, body) = response.into_parts();
         let body_bytes = body
@@ -353,7 +355,12 @@ impl HttpProxyService {
             .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
             .to_bytes();
 
-        let new_response = Response::from_parts(parts, Full::new(body_bytes).map_err(|never| match never {}).boxed());
+        let new_response = Response::from_parts(
+            parts,
+            Full::new(body_bytes)
+                .map_err(|never| match never {})
+                .boxed(),
+        );
 
         log_debug!("HTTP request completed: {} {}", method, uri);
         Ok(new_response)
@@ -371,7 +378,8 @@ impl HttpProxyService {
 impl Service<Request<Incoming>> for HttpProxyService {
     type Response = Response<BoxBody>;
     type Error = MystiProxyError;
-    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response>> + Send>>;
+    type Future =
+        std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response>> + Send>>;
 
     fn call(&self, req: Request<Incoming>) -> Self::Future {
         let config = self.config.clone();
@@ -440,13 +448,10 @@ impl HttpProxyAcceptor {
         let mut client_stream = stream;
 
         let mut buf = vec![0u8; 8192];
-        let n = tokio::time::timeout(
-            self.config.request_timeout,
-            client_stream.read(&mut buf)
-        )
-        .await
-        .map_err(|_| MystiProxyError::Timeout)?
-        .map_err(MystiProxyError::Io)?;
+        let n = tokio::time::timeout(self.config.request_timeout, client_stream.read(&mut buf))
+            .await
+            .map_err(|_| MystiProxyError::Timeout)?
+            .map_err(MystiProxyError::Io)?;
 
         let request_str = String::from_utf8_lossy(&buf[..n]);
         let lines: Vec<&str> = request_str.lines().collect();
@@ -479,7 +484,9 @@ impl HttpProxyAcceptor {
             log_debug!("Proxy authenticated as user: {}", user);
         } else {
             let response = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"MystiProxy\"\r\n\r\n";
-            client_stream.write_all(response.as_bytes()).await
+            client_stream
+                .write_all(response.as_bytes())
+                .await
                 .map_err(MystiProxyError::Io)?;
             return Ok(());
         }
@@ -488,7 +495,9 @@ impl HttpProxyAcceptor {
             self.handle_connect(target, client_stream).await
         } else {
             let response = "HTTP/1.1 400 Bad Request\r\n\r\nUse HTTP proxy for HTTP requests";
-            client_stream.write_all(response.as_bytes()).await
+            client_stream
+                .write_all(response.as_bytes())
+                .await
                 .map_err(MystiProxyError::Io)?;
             Ok(())
         }
@@ -641,7 +650,10 @@ mod tests {
 
         let mut headers = hyper::header::HeaderMap::new();
         let credentials = BASE64.encode("test:pass");
-        headers.insert("Proxy-Authorization", format!("Basic {credentials}").parse().unwrap());
+        headers.insert(
+            "Proxy-Authorization",
+            format!("Basic {credentials}").parse().unwrap(),
+        );
 
         let result = config.authenticate(&headers);
         assert!(result.is_some());
@@ -656,7 +668,10 @@ mod tests {
 
         let mut headers = hyper::header::HeaderMap::new();
         let credentials = BASE64.encode("test:wrong");
-        headers.insert("Proxy-Authorization", format!("Basic {credentials}").parse().unwrap());
+        headers.insert(
+            "Proxy-Authorization",
+            format!("Basic {credentials}").parse().unwrap(),
+        );
 
         let result = config.authenticate(&headers);
         assert!(result.is_none());

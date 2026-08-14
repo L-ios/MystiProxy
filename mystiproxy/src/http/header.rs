@@ -4,7 +4,7 @@
 
 use crate::config::{HeaderAction, HeaderActionType};
 use crate::Result;
-use hyper::header::{HeaderName, HeaderMap};
+use hyper::header::{HeaderMap, HeaderName};
 use std::collections::HashMap;
 
 /// Header 转换器
@@ -93,7 +93,7 @@ impl HeaderTransformer {
                     // 格式：header_name=value
                     let header_name = &cond[..eq_pos];
                     let expected_value = &cond[eq_pos + 1..];
-                    
+
                     headers
                         .get(header_name)
                         .map(|v| v.to_str().unwrap_or("") == expected_value)
@@ -245,16 +245,10 @@ mod tests {
         headers.insert("Host", "localhost".parse().unwrap());
 
         // 条件满足
-        assert!(transformer.evaluate_condition(
-            &Some("Host=localhost".to_string()),
-            &headers
-        ));
+        assert!(transformer.evaluate_condition(&Some("Host=localhost".to_string()), &headers));
 
         // 条件不满足
-        assert!(!transformer.evaluate_condition(
-            &Some("Host=example.com".to_string()),
-            &headers
-        ));
+        assert!(!transformer.evaluate_condition(&Some("Host=example.com".to_string()), &headers));
     }
 
     #[test]
@@ -274,7 +268,7 @@ mod tests {
     #[test]
     fn test_multiple_actions() {
         let mut actions = HashMap::new();
-        
+
         // 覆盖 Host
         actions.insert(
             "Host".to_string(),
@@ -284,7 +278,7 @@ mod tests {
                 condition: None,
             },
         );
-        
+
         // 添加缺失的 header
         actions.insert(
             "X-Added".to_string(),
@@ -294,7 +288,7 @@ mod tests {
                 condition: None,
             },
         );
-        
+
         // 删除某个 header
         actions.insert(
             "X-Remove".to_string(),
@@ -314,7 +308,10 @@ mod tests {
 
         // 验证结果
         assert_eq!(headers.get("Host").unwrap().to_str().unwrap(), "localhost");
-        assert_eq!(headers.get("X-Added").unwrap().to_str().unwrap(), "added-value");
+        assert_eq!(
+            headers.get("X-Added").unwrap().to_str().unwrap(),
+            "added-value"
+        );
         assert!(!headers.contains_key("X-Remove"));
     }
 

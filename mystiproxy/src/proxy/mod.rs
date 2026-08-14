@@ -12,8 +12,8 @@ pub mod unix;
 pub use address::Address;
 pub use forward::{
     connect_to_target, forward_bidirectional, forward_bidirectional_with_timeout,
-    forward_tcp_to_tcp, forward_to_target, forward_to_target_with_timeout,
-    ForwardResult, TransferStats,
+    forward_tcp_to_tcp, forward_to_target, forward_to_target_with_timeout, ForwardResult,
+    TransferStats,
 };
 
 #[cfg(unix)]
@@ -182,7 +182,6 @@ impl ProxyServer {
         &self.config.target
     }
 }
-
 
 /// TCP 代理服务（简化版本）
 pub struct TcpProxy {
