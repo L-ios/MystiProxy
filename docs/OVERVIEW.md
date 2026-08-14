@@ -149,8 +149,9 @@ sequenceDiagram
 
 ### mysticentral（真实二进制 + PostgreSQL 16 容器实测）
 
-- `/health`、环境 CRUD、Mock CRUD、实例注册（`endpoint_url` 必填）、心跳、`sync/pull`（正确返回新建 mock）、分析统计、导出、冲突列表全部正常
+- `/health`、环境 CRUD、Mock CRUD、实例注册（`endpoint_url` 必填）、心跳、`sync/pull`（正确返回新建 mock）、`sync/push`（含冲突检测与解决，见下）、分析统计、导出、冲突列表全部正常
 - 数据库迁移自动执行成功
+- **冲突路径实测**：push 一个与中心版本向量并发（`is_concurrent_with`）的本地修改 → 返回 `{"conflicts":[{reason:"concurrent_modification", local, central}]}`，中心版本未被覆盖；随后 `POST /sync/conflicts/:id/resolve`（strategy=keep_local）→ 本地版本胜出，合并后的版本向量包含两侧分量；push 一个被中心支配（dominated）的旧版本 → 正常 `accepted`，无误报冲突。向量时钟语义（并发检测、支配判定、合并递增）全部按设计工作。
 
 ### 工程验证
 
