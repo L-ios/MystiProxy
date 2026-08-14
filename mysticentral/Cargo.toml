@@ -51,6 +51,9 @@ clap = { version = "4", features = ["derive", "env"] }
 # Async trait support
 async-trait = "0.1"
 
+# HTTP client for pushing configs to instances
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+
 # SHA-256 for content hashing
 sha2 = "0.10"
 hex = "0.4"

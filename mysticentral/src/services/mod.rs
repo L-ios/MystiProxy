@@ -12,7 +12,9 @@ mod instance_repository;
 mod instance_service;
 mod mock_service;
 mod postgres_repository;
+mod push_service;
 mod repository;
+mod settings_repository;
 mod sync_protocol;
 mod sync_service;
 pub(crate) mod user_repository;
@@ -29,7 +31,11 @@ pub use instance_repository::{InstanceRepository, PostgresInstanceRepository};
 pub use instance_service::InstanceService;
 pub use mock_service::MockService;
 pub use postgres_repository::PostgresMockRepository;
+pub use push_service::{now_rfc3339, push_to_all, push_to_instance, summarize};
 pub use repository::MockRepository;
+pub use settings_repository::{
+    PostgresSettingsRepository, SettingsPatch, SettingsRepository, SystemSettings,
+};
 pub use sync_protocol::{
     ConflictReason, ConflictResolution, SyncConflict, SyncPullResponse, SyncPushResponse,
 };

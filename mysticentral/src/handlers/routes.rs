@@ -105,6 +105,27 @@ pub fn create_routes() -> Router<AppState> {
 pub fn create_protected_routes() -> Router<AppState> {
     Router::new()
         .route(
+            "/api/v1/settings",
+            axum::routing::get(crate::handlers::settings::get_settings)
+                .put(crate::handlers::settings::update_settings),
+        )
+        .route(
+            "/api/v1/sync/status",
+            axum::routing::get(crate::handlers::settings::sync_status),
+        )
+        .route(
+            "/api/v1/sync",
+            axum::routing::post(crate::handlers::settings::trigger_sync),
+        )
+        .route(
+            "/api/v1/instances/push-all",
+            axum::routing::post(crate::handlers::settings::push_all_instances),
+        )
+        .route(
+            "/api/v1/instances/:id/push",
+            axum::routing::post(crate::handlers::settings::push_instance),
+        )
+        .route(
             "/api/v1/conflicts",
             axum::routing::get(crate::handlers::conflicts::list_conflicts),
         )

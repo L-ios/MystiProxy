@@ -5,6 +5,7 @@
 pub(crate) mod auth;
 pub(crate) mod conflicts;
 mod routes;
+pub(crate) mod settings;
 pub(crate) mod users;
 
 pub use auth::{login, logout};
