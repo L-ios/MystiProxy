@@ -42,16 +42,20 @@ static 提供者从配置的根目录读取文件并返回给客户端。根据�
 
 ### TLS 认证
 
-TLS 相关代码位于 src/tls/ 目录，支持单向和双向 TLS 认证。但这些功能尚未集成到主程序 main.rs 中，默认配置不会启用。需要手动修改代码才能激活 TLS 支持。
+TLS 相关代码位于 src/tls/ 目录，支持单向和双向 TLS 认证。TLS 可通过引擎配置中的 `tls` 字段启用（HTTP 引擎已支持），证书热重载目前仅在 mysticentral 的 legacy-tls 模块中实现。
 
 ### HTTP 鉴权
 
-HTTP 认证功能实现于 src/http/auth.rs，支持基于请求头的认证方式和 JWT Token 验证。但认证逻辑未接入 HTTP Handler 的处理流程，无法通过配置文件直接启用。
+HTTP 认证功能实现于 src/http/auth.rs，支持基于请求头的认证方式和 JWT Token 验证。认证逻辑已接入 HTTP Handler 的处理流程（见 handler.rs 中的 authenticate 调用），可通过引擎配置的 `auth` 字段启用。
 
 ### 请求体 JSON 转换
 
-BodyTransformer 实现了基于 JSONPath 的请求体转换功能，可以对 JSON 请求体进行部分字段的提取、修改或删除。目前仅提供部分支持，完整功能需要进一步测试和集成。
+BodyTransformer 实现了基于 JSONPath 的请求体转换功能，可以对 JSON 请求体进行部分字段的提取、修改或删除。已接入代理请求链路（配置 location.request.body 后生效），实测可用。
 
 ### 连接池
 
-HttpClientPool 提供了 HTTP 连接池管理能力，可以复用连接以提升性能。但该模块尚未在主请求处理流程中启用，当前使用单次连接模式。
+HttpClientPool 提供了 HTTP 连接池管理能力，可以复用连接以提升性能。该模块已接入主请求处理流程（运行日志可见 "Created new HTTP client"）。
+
+### 性能监控（部分实现）
+
+metrics.rs 中的 MetricsManager 在进程内统计请求数/耗时/错误数，但 Prometheus 指标导出端点（127.0.0.1:9090/metrics）目前为占位实现，`start_server()` 仅记录日志，实际未暴露任何指标数据。
