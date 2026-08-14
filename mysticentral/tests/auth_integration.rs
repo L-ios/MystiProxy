@@ -25,10 +25,15 @@ fn test_lock() -> TestGuard {
     // Leak-free: guard releases on drop
     TestGuard(TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner()))
 }
+fn db_url_missing() -> bool {
+    std::env::var("TEST_DATABASE_URL").is_err() && std::env::var("DATABASE_URL").is_err()
+}
+
 async fn test_pool() -> sqlx::PgPool {
     let url = std::env::var("TEST_DATABASE_URL")
         .or_else(|_| std::env::var("DATABASE_URL"))
         .expect("TEST_DATABASE_URL or DATABASE_URL must point to a test PostgreSQL");
+
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&url)
@@ -119,6 +124,10 @@ async fn login_get_token(app: &Router, user: &str, pass: &str) -> (StatusCode, V
 
 #[tokio::test]
 async fn full_auth_flow() {
+    if db_url_missing() {
+        eprintln!("SKIP: no TEST_DATABASE_URL");
+        return;
+    }
     let _g = test_lock();
     let pool = test_pool().await;
     cleanup(&pool).await;
@@ -311,6 +320,10 @@ async fn full_auth_flow() {
 
 #[tokio::test]
 async fn duplicate_username_conflict() {
+    if db_url_missing() {
+        eprintln!("SKIP: no TEST_DATABASE_URL");
+        return;
+    }
     let _g = test_lock();
     let pool = test_pool().await;
     cleanup(&pool).await;
@@ -363,6 +376,10 @@ async fn duplicate_username_conflict() {
 
 #[tokio::test]
 async fn short_password_rejected() {
+    if db_url_missing() {
+        eprintln!("SKIP: no TEST_DATABASE_URL");
+        return;
+    }
     let _g = test_lock();
     let pool = test_pool().await;
     cleanup(&pool).await;
