@@ -55,6 +55,8 @@ where
     listener: Option<StreamListener>,
     /// TLS 服务器（可选）
     tls_server: Option<Arc<TlsServer>>,
+    /// 入站 IP 过滤（None = 不过滤）
+    ip_filter: Option<crate::ip_filter::IpFilter>,
 }
 
 impl<S> HttpServer<S>
@@ -70,7 +72,14 @@ where
             service,
             listener: None,
             tls_server,
+            ip_filter: None,
         }
+    }
+
+    /// 设置入站 IP 过滤（链式）
+    pub fn with_ip_filter(mut self, filter: Option<crate::ip_filter::IpFilter>) -> Self {
+        self.ip_filter = filter;
+        self
     }
 
     /// 创建新的 HTTP 服务器（带 TLS 配置）
@@ -130,6 +139,13 @@ where
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
+                    if let (Some(filter), Some(ip)) = (&self.ip_filter, addr.ip()) {
+                        if !filter.is_allowed(ip) {
+                            warn!("HTTP connection from {} rejected by IP filter", addr);
+                            continue;
+                        }
+                    }
+
                     info!("Accepted HTTP connection from {}", addr);
 
                     let service = self.service.clone();

@@ -255,6 +255,8 @@ fn test_e2e_config_serialization_round_trip() {
         }]),
         auth: None,
         upstream: None,
+        allow: None,
+        deny: None,
         tls: None,
     };
 
@@ -397,6 +399,8 @@ fn test_e2e_build_config_from_structs() {
                         }),
                         tls: None,
                         upstream: None,
+                        allow: None,
+                        deny: None,
                     },
                 );
                 m

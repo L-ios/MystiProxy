@@ -60,6 +60,12 @@ pub struct EngineConfig {
     /// 上游代理地址 (如 http://proxy:8080)
     #[serde(default)]
     pub upstream: Option<String>,
+    /// 入站 CIDR 白名单（非空时仅放行命中项）
+    #[serde(default)]
+    pub allow: Option<Vec<String>>,
+    /// 入站 CIDR 黑名单（优先于 allow）
+    #[serde(default)]
+    pub deny: Option<Vec<String>>,
 }
 
 /// TLS 配置

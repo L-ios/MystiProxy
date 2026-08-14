@@ -103,7 +103,7 @@ flowchart TD
 - **路由**：Full / Prefix / Regex / PrefixRegex 四种匹配模式
 - **中心化管理（mysticentral）**：Mock CRUD、多环境管理、实例注册与心跳（`endpoint_url` 必填）、版本向量冲突检测、导入导出、分析统计、JWT 用户管理
 - **本地管理（management，feature 门控）**：SQLite 离线存储、离线操作队列、重试策略、与中心双向同步
-- **运维**：多引擎并存、Docker 镜像、Helm Chart（HPA/Ingress/RBAC）
+- **运维**：多引擎并存、Docker 镜像、Helm Chart（HPA/Ingress/RBAC）、入站 IP 过滤（allow/deny CIDR，deny 优先）
 
 ## 五、分布式同步机制
 

@@ -110,6 +110,8 @@ async fn start_test_server(locations: Vec<LocationConfig>) -> String {
         locations: Some(locations),
         auth: None,
         upstream: None,
+        allow: None,
+        deny: None,
         tls: None,
     };
 

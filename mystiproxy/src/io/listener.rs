@@ -64,6 +64,17 @@ pub enum SocketAddr {
     Uds(unix::SocketAddr),
 }
 
+impl SocketAddr {
+    /// 对 TCP 地址返回其 IP；UDS 无 IP 概念，返回 None（UDS 由文件系统权限控制）
+    pub fn ip(&self) -> Option<std::net::IpAddr> {
+        match self {
+            Self::Tcp(addr) => Some(addr.ip()),
+            #[cfg(unix)]
+            Self::Uds(_) => None,
+        }
+    }
+}
+
 impl Display for SocketAddr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

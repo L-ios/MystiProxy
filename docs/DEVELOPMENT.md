@@ -52,7 +52,7 @@ cargo clippy
 - [ ] tcp://ip:port
 - [ ] udp://ip:port
 - [ ] unix://file
-- [ ] 根据请求的 IP 过滤请求，或者拒绝连接
+- [x] 根据请求的 IP 过滤请求，或者拒绝连接（allow/deny CIDR，见 docs/features/F5）
 
 ### 7 层协议转发 [0%]
 

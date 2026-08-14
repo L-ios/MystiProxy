@@ -65,6 +65,8 @@ async fn start_proxy_with_auth(auth_config: AuthConfig) -> (String, u16) {
         locations: None,
         auth: Some(auth_config),
         upstream: None,
+        allow: None,
+        deny: None,
         tls: None,
     };
 
@@ -258,6 +260,8 @@ async fn test_e2e_auth_no_config_allows_all() {
         locations: None,
         auth: None,
         upstream: None,
+        allow: None,
+        deny: None,
         tls: None,
     };
 

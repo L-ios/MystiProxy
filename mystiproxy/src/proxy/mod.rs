@@ -40,6 +40,8 @@ pub struct ProxyConfig {
     pub proxy_type: ProxyType,
     /// 超时时间
     pub timeout: Option<Duration>,
+    /// 入站 IP 过滤（None = 不过滤）
+    pub ip_filter: Option<crate::ip_filter::IpFilter>,
 }
 
 impl ProxyConfig {
@@ -48,11 +50,14 @@ impl ProxyConfig {
         let listen = Address::parse(&config.listen)?;
         let target = Address::parse(&config.target)?;
 
+        let ip_filter = crate::ip_filter::IpFilter::from_config(&config.allow, &config.deny)?;
+
         Ok(Self {
             listen,
             target,
             proxy_type: config.proxy_type.clone(),
             timeout: config.request_timeout,
+            ip_filter,
         })
     }
 }
@@ -94,6 +99,7 @@ impl ProxyServer {
             target: target_addr,
             proxy_type: ProxyType::Tcp,
             timeout,
+            ip_filter: None,
         }))
     }
 
@@ -125,6 +131,13 @@ impl ProxyServer {
         loop {
             match listener.accept().await {
                 Ok((stream, addr)) => {
+                    if let (Some(filter), Some(ip)) = (&self.config.ip_filter, addr.ip()) {
+                        if !filter.is_allowed(ip) {
+                            warn!("Connection from {} rejected by IP filter", addr);
+                            continue;
+                        }
+                    }
+
                     info!("Accepted connection from {}", addr);
 
                     let target_addr = self.config.target.to_string();
@@ -285,6 +298,8 @@ mod tests {
             auth: None,
             tls: None,
             upstream: None,
+            allow: None,
+            deny: None,
         };
 
         let proxy_config = ProxyConfig::from_engine_config(&engine_config).unwrap();

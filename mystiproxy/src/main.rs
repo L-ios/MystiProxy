@@ -138,6 +138,17 @@ async fn main() -> Result<()> {
                     }
                 };
 
+                let ip_filter = match mystiproxy::ip_filter::IpFilter::from_config(
+                    &engine_config.allow,
+                    &engine_config.deny,
+                ) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        error!("引擎 '{}' IP 过滤配置错误: {}", name_clone, e);
+                        continue;
+                    }
+                };
+
                 let mut server = if let Some(tls_config) = &engine_config.tls {
                     match HttpServer::new_with_tls(
                         HttpServerConfig::new(
@@ -162,7 +173,8 @@ async fn main() -> Result<()> {
                         handler,
                         None,
                     )
-                };
+                }
+                .with_ip_filter(ip_filter);
 
                 if let Err(e) = server.start().await {
                     error!("HTTP 引擎 '{}' 启动失败: {}", name_clone, e);
@@ -284,6 +296,8 @@ fn load_config(args: &MystiArg) -> Result<MystiConfig> {
             auth: None,
             tls: None,
             upstream: None,
+            allow: None,
+            deny: None,
         };
 
         let mut engine_map = HashMap::new();

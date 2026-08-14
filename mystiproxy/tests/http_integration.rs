@@ -45,6 +45,8 @@ fn make_engine_config(port: u16, locations: Vec<LocationConfig>) -> EngineConfig
         auth: None,
         tls: None,
         upstream: None,
+        allow: None,
+        deny: None,
     }
 }
 
