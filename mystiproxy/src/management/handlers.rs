@@ -15,6 +15,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use super::error::ManagementError;
+
+type Result<T, E = ApiError> = std::result::Result<T, E>;
 use super::models::{
     CreateMockRequest, MockConfiguration, MockFilter, UpdateMockRequest,
 };

@@ -15,7 +15,7 @@ pub use mysti_common::{
     // Sync types
     SyncStatus, SyncMessage, ConflictResolution,
     // Additional types needed
-    BodyMatchType, ResponseBodyType as BodyType, ResponseBody,
+    BodyMatchType, ResponseBody, ResponseBodyType,
     HeaderMatch, QueryParamMatch, BodyMatch, MatchType, PathPatternType,
     TemplateVarSource, TemplateVar,
 };
