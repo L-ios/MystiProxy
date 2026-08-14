@@ -105,6 +105,19 @@ pub fn create_routes() -> Router<AppState> {
 pub fn create_protected_routes() -> Router<AppState> {
     Router::new()
         .route(
+            "/api/v1/conflicts",
+            axum::routing::get(crate::handlers::conflicts::list_conflicts),
+        )
+        .route(
+            "/api/v1/conflicts/:config_id",
+            axum::routing::get(crate::handlers::conflicts::get_conflict)
+                .delete(crate::handlers::conflicts::dismiss_conflict),
+        )
+        .route(
+            "/api/v1/conflicts/:config_id/resolve",
+            axum::routing::put(crate::handlers::conflicts::resolve_conflict),
+        )
+        .route(
             "/api/v1/users",
             axum::routing::get(list_users).post(create_user),
         )
@@ -401,7 +414,7 @@ pub async fn sync_push(
     State(state): State<AppState>,
     Json(request): Json<serde_json::Value>,
 ) -> Response {
-    let repo = PostgresMockRepository::new(state.pool);
+    let repo = PostgresMockRepository::new(state.pool.clone());
     let service = MockService::new(repo);
 
     let mut accepted = Vec::new();
@@ -412,12 +425,25 @@ pub async fn sync_push(
             if let Ok(config) =
                 serde_json::from_value::<crate::models::MockConfiguration>(config_value.clone())
             {
+                let conflict_repo =
+                    crate::services::PostgresConflictRepository::new(state.pool.clone());
                 match service.get(config.id).await {
                     Ok(existing) => {
                         if existing
                             .version_vector
                             .is_concurrent_with(&config.version_vector)
                         {
+                            // Persist for the conflicts UI (best-effort; response stays compatible)
+                            use crate::services::ConflictRecord;
+                            use crate::services::ConflictRepository as _;
+                            let _ = conflict_repo
+                                .upsert(ConflictRecord {
+                                    config_id: config.id,
+                                    local_version: config.clone(),
+                                    central_version: existing.clone(),
+                                    detected_at: chrono::Utc::now(),
+                                })
+                                .await;
                             conflicts.push(json!({
                                 "id": config.id,
                                 "reason": "concurrent_modification",
@@ -447,9 +473,16 @@ pub async fn sync_push(
     .into_response()
 }
 
-pub async fn list_conflicts(State(_state): State<AppState>) -> impl IntoResponse {
+pub async fn list_conflicts(State(state): State<AppState>) -> impl IntoResponse {
+    use crate::services::ConflictRepository as _;
+    let repo = crate::services::PostgresConflictRepository::new(state.pool.clone());
+    let conflicts = repo.find_all().await.unwrap_or_default();
+    let data: Vec<_> = conflicts
+        .iter()
+        .map(crate::services::conflict_json)
+        .collect();
     Json(json!({
-        "data": []
+        "data": data
     }))
 }
 

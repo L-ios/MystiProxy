@@ -4,6 +4,7 @@
 
 pub(crate) mod auth_service;
 mod bootstrap;
+pub(crate) mod conflict_repository;
 mod conflict_service;
 mod environment_repository;
 mod environment_service;
@@ -19,6 +20,9 @@ mod websocket;
 
 pub use auth_service::AuthService;
 pub use bootstrap::ensure_admin_user;
+pub use conflict_repository::{
+    conflict_json, ConflictRecord, ConflictRepository, PostgresConflictRepository,
+};
 pub use environment_repository::{EnvironmentRepository, PostgresEnvironmentRepository};
 pub use environment_service::EnvironmentService;
 pub use instance_repository::{InstanceRepository, PostgresInstanceRepository};

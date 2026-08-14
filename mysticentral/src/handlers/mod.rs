@@ -3,6 +3,7 @@
 //! Provides Axum handlers for all API endpoints.
 
 pub(crate) mod auth;
+pub(crate) mod conflicts;
 mod routes;
 pub(crate) mod users;
 
