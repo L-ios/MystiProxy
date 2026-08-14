@@ -201,3 +201,52 @@ MYSTICENTRAL_JWT_SECRET=<32+字符> \
 # 前端
 cd frontend && npm run build
 ```
+
+
+## 九、mysticentral 与本地管理 API 接口清单（实测汇总）
+
+### mysticentral 已实现（全部实测 200）
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| GET/POST | `/api/v1/mocks` | Mock 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/mocks/:id` | Mock 详情/更新/删除 |
+| POST | `/api/v1/mocks/import` | 批量导入 |
+| GET | `/api/v1/mocks/export` | 导出 |
+| GET/POST | `/api/v1/environments` | 环境列表/创建 |
+| GET/PUT/DELETE | `/api/v1/environments/:id` | 环境 CRUD |
+| GET/POST | `/api/v1/instances` | 实例列表/注册（`endpoint_url` 必填） |
+| GET/DELETE | `/api/v1/instances/:id` | 实例详情/删除 |
+| POST | `/api/v1/instances/:id/heartbeat` | 心跳 |
+| POST | `/api/v1/sync/pull` | 拉取变更 |
+| POST | `/api/v1/sync/push` | 推送变更（含向量时钟冲突检测） |
+| GET | `/api/v1/sync/conflicts` | 冲突列表（当前返回空，冲突仅在 push 响应中体现） |
+| POST | `/api/v1/sync/conflicts/:id/resolve` | 冲突解决（keep_local/keep_central/merge） |
+| GET | `/api/v1/analytics/stats` | 全局统计 |
+| GET | `/api/v1/analytics/mock/:id` | 单 Mock 统计 |
+
+### mysticentral 未实现（前端已调用，实测 404/405）
+
+| 前端调用 | 状态 |
+|---------|------|
+| `POST /api/v1/auth/login`、`/auth/logout` | 404（AuthService 已有 JWT 签发能力但未挂路由） |
+| `GET/POST /api/v1/users`、`/users/me`、`/users/me/password` | 404 |
+| `GET/PUT /api/v1/settings` | 404 |
+| `GET /api/v1/sync/status` | 404（本地管理 API 有同名端点，但中心端没有） |
+| `GET/PUT/DELETE /api/v1/conflicts/*` | 404（路径不一致，后端为 `/sync/conflicts`） |
+| `POST /api/v1/instances/:id/push` | 404 |
+| `POST /api/v1/instances/push-all` | 405（GET 已注册，POST 未注册） |
+
+### mystiproxy 本地管理 API（`local-management` feature，2026-08-14 修复编译后可用）
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/api/v1/health` | 健康检查 |
+| GET/POST | `/api/v1/mocks` | 本地 Mock 列表/创建（SQLite） |
+| GET/PUT/DELETE | `/api/v1/mocks/:id` | 本地 Mock CRUD |
+| POST/PUT/DELETE | `/api/v1/mocks/batch` | 批量操作 |
+| GET | `/api/v1/sync/status` | 同步状态 |
+| POST | `/api/v1/sync/trigger` | 手动触发同步 |
+
+> 注：该模块此前因类型重导出缺失和泛型括号错误无法编译（`cargo build --features local-management` 失败），已修复（commit 849333c），157 单元测试 + 11 文档测试全部通过。
