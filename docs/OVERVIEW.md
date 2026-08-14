@@ -153,6 +153,23 @@ sequenceDiagram
 - 数据库迁移自动执行成功
 - **冲突路径实测**：push 一个与中心版本向量并发（`is_concurrent_with`）的本地修改 → 返回 `{"conflicts":[{reason:"concurrent_modification", local, central}]}`，中心版本未被覆盖；随后 `POST /sync/conflicts/:id/resolve`（strategy=keep_local）→ 本地版本胜出，合并后的版本向量包含两侧分量；push 一个被中心支配（dominated）的旧版本 → 正常 `accepted`，无误报冲突。向量时钟语义（并发检测、支配判定、合并递增）全部按设计工作。
 
+### 前端 ↔ 中心端接口对齐情况（实测，2026-08-14）
+
+前端（`frontend/src/api/*.ts`）调用的部分端点在 mysticentral 中**尚未实现**，登录后相关页面将不可用：
+
+| 前端调用 | 实测响应 | 说明 |
+|---------|---------|------|
+| `POST /auth/login`、`POST /auth/logout` | 404 | 登录功能后端缺失（前端有完整登录页与 token 存储逻辑） |
+| `GET/PUT /users`、`/users/me`、`/users/me/password` | 404 | 用户管理后端缺失 |
+| `GET/PUT /settings` | 404 | 设置页后端缺失 |
+| `GET /sync/status` | 404 | 同步状态页后端缺失 |
+| `GET/PUT/DELETE /conflicts/*` | 404 | 前端使用 `/conflicts`，后端实际为 `/sync/conflicts`，**路径不一致** |
+| `POST /instances/:id/push` | 404 | 推送单实例配置后端缺失 |
+| `POST /instances/push-all` | 405 | 路由存在但方法不匹配 |
+| `GET/POST /mocks`、`/environments`、`/instances`、`/sync/pull` | 200 | 正常对齐 |
+
+> 结论：前端是按**目标 API 设计**先行开发的，mysticentral 尚未实现 auth/users/settings/conflicts 等模块。集成时需补齐后端或将前端指向已实现的端点。
+
 ### 工程验证
 
 - `cargo test --all`：21 通过 / 0 失败 / 1 忽略
