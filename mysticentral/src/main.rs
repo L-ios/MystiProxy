@@ -3,9 +3,14 @@
 //! This crate provides the central management server for HTTP mock configurations,
 //! supporting team collaboration, environment management, and distributed synchronization.
 
+#[cfg(not(feature = "legacy-tls"))]
 use anyhow::Result;
+#[cfg(feature = "legacy-tls")]
+use anyhow::{Context, Result};
 use axum::middleware::from_fn_with_state;
 use axum::Router;
+#[cfg(feature = "legacy-tls")]
+use hyper_util::rt::TokioIo;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
@@ -162,7 +167,7 @@ async fn main() -> Result<()> {
                 // Convert tower service to hyper service
                 let hyper_service = hyper_util::service::TowerToHyperService::new(app);
 
-                if let Err(e) = http1::Builder::new()
+                if let Err(e) = hyper::server::conn::http1::Builder::new()
                     .serve_connection(io, hyper_service)
                     .await
                 {

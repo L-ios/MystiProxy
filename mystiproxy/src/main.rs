@@ -215,7 +215,12 @@ async fn main() -> Result<()> {
                 let engine_name = name_clone.clone();
                 tasks.spawn(async move {
                     set_engine_name(&engine_name);
-                    let listener = match tokio::net::TcpListener::bind(&listen_addr).await {
+                    // 剥离协议前缀（如 tcp://）后再绑定
+                    let bind_addr = listen_addr
+                        .strip_prefix("tcp://")
+                        .or_else(|| listen_addr.strip_prefix("unix://"))
+                        .unwrap_or(&listen_addr);
+                    let listener = match tokio::net::TcpListener::bind(bind_addr).await {
                         Ok(l) => l,
                         Err(e) => {
                             error!("Forward proxy bind failed '{}': {}", engine_name, e);

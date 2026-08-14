@@ -8,9 +8,9 @@ mod routes;
 pub(crate) mod settings;
 pub(crate) mod users;
 
-pub use auth::{login, logout};
 pub use routes::{create_protected_routes, create_routes, AppState};
-pub use users::{
-    change_own_password, create_user, delete_user, get_current_user, get_user, list_users,
-    update_user,
-};
+
+// Test shim: integration tests reference `mysticentral::handlers::login`
+#[doc(hidden)]
+#[allow(unused_imports)]
+pub use auth::login;

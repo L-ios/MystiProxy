@@ -33,10 +33,13 @@ pub use mock_service::MockService;
 pub use postgres_repository::PostgresMockRepository;
 pub use push_service::{now_rfc3339, push_to_all, push_to_instance, summarize};
 pub use repository::MockRepository;
+#[allow(unused_imports)]
 pub use settings_repository::{
     PostgresSettingsRepository, SettingsPatch, SettingsRepository, SystemSettings,
 };
+#[allow(unused_imports)]
 pub use sync_protocol::{
     ConflictReason, ConflictResolution, SyncConflict, SyncPullResponse, SyncPushResponse,
 };
+#[allow(unused_imports)]
 pub use user_repository::{PostgresUserRepository, UserRepository};

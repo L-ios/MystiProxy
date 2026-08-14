@@ -7,8 +7,8 @@ use tracing::{info, warn};
 
 use super::error::{ManagementError, Result};
 use super::models::{
-    BodyMatchType, BodyType, CreateMockRequest, MatchingRules, MockConfiguration, ResponseBody,
-    ResponseConfig,
+    BodyMatchType, CreateMockRequest, MatchingRules, MockConfiguration, ResponseBody,
+    ResponseBodyType, ResponseConfig,
 };
 use super::repository::MockRepository;
 
@@ -180,9 +180,7 @@ impl MockEntry {
 impl MatchingEntry {
     /// Convert to MatchingRules
     pub fn to_matching_rules(&self, path: &str) -> MatchingRules {
-        use super::models::{
-            BodyMatch, HeaderMatch, MatchType, PathPatternType, QueryParamMatch, TemplateVarSource,
-        };
+        use super::models::{BodyMatch, HeaderMatch, MatchType, PathPatternType, QueryParamMatch};
 
         let path_pattern_type = self
             .path_pattern_type
@@ -276,12 +274,12 @@ impl ResponseEntry {
                 .body_type
                 .as_ref()
                 .map(|t| match t.to_lowercase().as_str() {
-                    "template" => BodyType::Template,
-                    "file" => BodyType::File,
-                    "script" => BodyType::Script,
-                    _ => BodyType::Static,
+                    "template" => ResponseBodyType::Template,
+                    "file" => ResponseBodyType::File,
+                    "script" => ResponseBodyType::Script,
+                    _ => ResponseBodyType::Static,
                 })
-                .unwrap_or(BodyType::Static);
+                .unwrap_or(ResponseBodyType::Static);
 
             let content = b.content.clone();
 

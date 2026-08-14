@@ -388,9 +388,16 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
             }
 
             let route_match = match router.match_uri(&path) {
-                Some((route, _match_result)) => {
+                Some((route, match_result)) => {
                     let location = &route.location_config;
                     let provider = location.provider.as_ref().unwrap_or(&ProviderType::Proxy);
+                    // 前缀匹配时剥离 location 前缀，得到相对静态根目录的子路径
+                    let stripped_path = match match_result.remaining.as_deref() {
+                        Some(remaining) if !remaining.is_empty() => {
+                            format!("/{}", remaining.trim_start_matches('/'))
+                        }
+                        _ => "/".to_string(),
+                    };
                     match provider {
                         ProviderType::Proxy => RouteMatch::Proxy {
                             target: config.target.clone(),
@@ -414,7 +421,7 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                             }
                             RouteMatch::Static {
                                 config: sf_config,
-                                path: path.clone(),
+                                path: stripped_path,
                             }
                         }
                     }
