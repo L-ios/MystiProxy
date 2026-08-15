@@ -56,6 +56,6 @@ BodyTransformer 实现了基于 JSONPath 的请求体转换功能，可以对 JS
 
 HttpClientPool 提供了 HTTP 连接池管理能力，可以复用连接以提升性能。该模块已接入主请求处理流程（运行日志可见 "Created new HTTP client"）。
 
-### 性能监控（部分实现）
+### 性能监控（已实现）
 
-metrics.rs 中的 MetricsManager 在进程内统计请求数/耗时/错误数，但 Prometheus 指标导出端点（127.0.0.1:9090/metrics）目前为占位实现，`start_server()` 仅记录日志，实际未暴露任何指标数据。
+metrics.rs 中的 MetricsManager 在进程内统计请求数/耗时/错误数，并通过 Prometheus 导出端点（`GET 127.0.0.1:9090/metrics`）以标准 exposition 格式暴露 5 个指标（`http_requests_total` 带 method/status 标签、请求耗时直方图、TCP 连接时长、错误计数、内存占用）。main 与 handler 共享进程级 Registry（`global_metrics()` 单例）。
