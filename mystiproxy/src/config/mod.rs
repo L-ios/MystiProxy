@@ -4,6 +4,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::time::Duration;
 
+pub mod validation;
+
 /// 顶层配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MystiConfig {
