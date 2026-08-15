@@ -411,6 +411,7 @@ async fn test_e2e_proxy_and_mock_coexist() {
             status: Some(201),
             headers: None,
             body: None,
+            conditions: None,
         }),
         request: None,
         index_files: None,

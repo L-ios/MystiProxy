@@ -398,12 +398,19 @@ impl MockBuilder {
             if let Some(body_type) = &body_config.body_type {
                 match body_type {
                     BodyType::Static => {
-                        // 静态响应体
-                        if let Some(json_config) = &body_config.json {
+                        // 静态响应体：优先 content（新增），向后兼容 json.value
+                        if let Some(content) = &body_config.content {
+                            Self::full_body(Bytes::from(content.clone()))
+                        } else if let Some(json_config) = &body_config.json {
                             Self::full_body(Bytes::from(json_config.value.clone()))
                         } else {
                             Self::empty_body()
                         }
+                    }
+                    BodyType::Template => {
+                        // 模版响应体：此构建路径无请求上下文，占位符保留原文
+                        let tpl = body_config.template.clone().unwrap_or_default();
+                        Self::full_body(Bytes::from(render_template(&tpl, "", None)))
                     }
                     BodyType::Json => {
                         // JSON 响应体
@@ -479,6 +486,7 @@ impl MockLocation {
             status: Some(200),
             headers: None,
             body: None,
+            conditions: None,
         });
 
         Ok(MockLocation {
@@ -638,6 +646,215 @@ mod urlencoding {
         }
 
         Some(result)
+    }
+}
+
+/// 模版占位符渲染：{{query.name}} 与 {{body.$.a.b}} / {{body.$.list[0].x}}
+/// 未解析的占位符保留原文并记录 warn。
+pub fn render_template(template: &str, uri: &str, body: Option<&Value>) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+
+    while let Some(start) = rest.find("{{") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        match after.find("}}") {
+            Some(end) => {
+                let key = &after[..end];
+                match resolve_placeholder(key, uri, body) {
+                    Some(v) => out.push_str(&v),
+                    None => {
+                        warn!("template placeholder unresolved: {{{{{key}}}}}");
+                        out.push_str("{{");
+                        out.push_str(key);
+                        out.push_str("}}");
+                    }
+                }
+                rest = &after[end + 2..];
+            }
+            None => {
+                // 未闭合，原样保留剩余（从占位符开始处）
+                out.push_str("{{");
+                out.push_str(after);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+fn resolve_placeholder(key: &str, uri: &str, body: Option<&Value>) -> Option<String> {
+    let key = key.trim();
+    if let Some(name) = key.strip_prefix("query.") {
+        return query_param(uri, name);
+    }
+    if let Some(path) = key.strip_prefix("body.") {
+        let path = path.strip_prefix('$')?;
+        return body.and_then(|b| walk_json(b, path));
+    }
+    None
+}
+
+fn query_param(uri: &str, name: &str) -> Option<String> {
+    let q = uri.split_once('?')?.1;
+    for pair in q.split('&') {
+        let (k, v) = pair.split_once('=')?;
+        if k == name {
+            return Some(url_decode(v));
+        }
+    }
+    None
+}
+
+fn url_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' if i + 2 < bytes.len() => {
+                if let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3]) {
+                    if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                        out.push(byte);
+                        i += 3;
+                        continue;
+                    }
+                }
+                out.push(bytes[i]);
+                i += 1;
+            }
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// 轻量 JSONPath walker：对象键与数组下标，如 "a.b[0].c"
+fn walk_json(value: &Value, path: &str) -> Option<String> {
+    let mut cur = value;
+    for seg in path.split('.').filter(|s| !s.is_empty()) {
+        // 拆出可能的数组下标
+        let (key, idx) = match seg.find('[') {
+            Some(i) => {
+                let close = seg.find(']')?;
+                let idx: usize = seg[i + 1..close].parse().ok()?;
+                (&seg[..i], Some(idx))
+            }
+            None => (seg, None),
+        };
+        if !key.is_empty() {
+            cur = cur.get(key)?;
+        }
+        if let Some(i) = idx {
+            cur = cur.get(i)?;
+        }
+    }
+    match cur {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        Value::Null => Some("null".to_string()),
+        _ => None, // 对象/数组不内联
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_query_placeholder_replaced() {
+        let out = render_template("hi {{query.name}}", "/p?name=ada", None);
+        assert_eq!(out, "hi ada");
+    }
+
+    #[test]
+    fn test_query_missing_kept_verbatim() {
+        let out = render_template("hi {{query.ghost}}", "/p?x=1", None);
+        assert_eq!(out, "hi {{query.ghost}}");
+    }
+
+    #[test]
+    fn test_query_url_decoded() {
+        let out = render_template("{{query.q}}", "/p?q=a%20b+c", None);
+        assert_eq!(out, "a b c");
+    }
+
+    #[test]
+    fn test_body_object_path() {
+        let body = json!({"a": {"b": "deep"}});
+        let out = render_template("v={{body.$.a.b}}", "/p", Some(&body));
+        assert_eq!(out, "v=deep");
+    }
+
+    #[test]
+    fn test_body_array_index() {
+        let body = json!({"list": [{"x": 1}, {"x": 2}]});
+        let out = render_template("{{body.$.list[1].x}}", "/p", Some(&body));
+        assert_eq!(out, "2");
+    }
+
+    #[test]
+    fn test_body_scalar_types() {
+        let body = json!({"n": 42, "f": 1.5, "b": true, "z": null, "s": "txt"});
+        let out = render_template(
+            "{{body.$.n}},{{body.$.f}},{{body.$.b}},{{body.$.z}},{{body.$.s}}",
+            "/p",
+            Some(&body),
+        );
+        assert_eq!(out, "42,1.5,true,null,txt");
+    }
+
+    #[test]
+    fn test_body_missing_path_kept() {
+        let body = json!({"a": 1});
+        let out = render_template("{{body.$.nope.deep}}", "/p", Some(&body));
+        assert_eq!(out, "{{body.$.nope.deep}}");
+    }
+
+    #[test]
+    fn test_no_body_placeholder_with_none_body() {
+        let out = render_template("{{body.$.a}}", "/p", None);
+        assert_eq!(out, "{{body.$.a}}");
+    }
+
+    #[test]
+    fn test_mixed_multiple_placeholders() {
+        let body = json!({"tier": "gold"});
+        let out = render_template(
+            "id={{query.id}} tier={{body.$.tier}} end",
+            "/u?id=7",
+            Some(&body),
+        );
+        assert_eq!(out, "id=7 tier=gold end");
+    }
+
+    #[test]
+    fn test_no_placeholder_returns_asis() {
+        assert_eq!(render_template("plain text", "/p", None), "plain text");
+    }
+
+    #[test]
+    fn test_unclosed_brace_kept() {
+        assert_eq!(render_template("a {{oops", "/p", None), "a {{oops");
+    }
+
+    #[test]
+    fn test_walk_json_object_and_array() {
+        let v = json!({"k": [10, 20]});
+        assert_eq!(walk_json(&v, "k[0]"), Some("10".to_string()));
+        assert_eq!(walk_json(&v, "k[1]"), Some("20".to_string()));
+        assert_eq!(walk_json(&v, "k[5]"), None);
+        assert_eq!(walk_json(&v, "missing"), None);
     }
 }
 
@@ -814,6 +1031,7 @@ mod tests {
                 status: Some(200),
                 headers: None,
                 body: None,
+                conditions: None,
             },
         };
 
@@ -833,6 +1051,7 @@ mod tests {
                 status: Some(201),
                 headers: None,
                 body: None,
+                conditions: None,
             },
         };
 
@@ -866,6 +1085,7 @@ mod tests {
                 map
             }),
             body: None,
+            conditions: None,
         };
 
         let response = MockBuilder::build_response(&config).unwrap();

@@ -97,7 +97,7 @@ flowchart TD
   - HTTP 7 层代理：method/URI 改写、Header 增删改（overwrite/missed/forceDelete）、JSONPath 请求体转换（overwrite/add/delete）、Host 头智能重写
   - Forward 正向代理：CONNECT 隧道、上游代理链式转发、Basic 认证、主机黑白名单
 - **Mock 与内容服务**
-  - Mock 响应：状态码/响应头/延迟模拟
+  - Mock 响应：状态码/响应头/延迟模拟；按请求内容条件命中（uri/path/query/header/body，多 location 回退）；模版响应体（{{query.x}} / {{body.$.a.b}} 占位符）；static content 固定内容
   - 静态文件：MIME 自动识别、Range 断点续传、目录列表
 - **安全**：Header/JWT 鉴权、NTLM 认证、TLS 单向/双向（mTLS）
 - **路由**：Full / Prefix / Regex / PrefixRegex 四种匹配模式

@@ -84,13 +84,12 @@ cargo clippy
 
 主要是根据请求中某些内容，直接进行响应，或者处理响应后再响应：
 
-- [ ] 根据请求中的 URI，进行响应
-- [ ] 根据请求头，进行响应
-- [ ] 根据请求 Body，进行响应
-  - [ ] Body 获取是 URI 中的 Query 部分
-  - [ ] Query 型的 Body 进行匹配后响应
-- [ ] 提供 Body 模版，然后特殊处理后，再进行响应
-  - 例如结合一些请求转发的能力，将 Mock 的能力进行提升
+- [x] 根据请求中的 URI，进行响应（conditions: uri/path，见 docs/features/F6）
+- [x] 根据请求头，进行响应（conditions: header）
+- [x] 根据请求 Body，进行响应（conditions: body/json）
+  - [x] Body 获取是 URI 中的 Query 部分（conditions: query + 模版 {{query.x}}）
+  - [x] Query 型的 Body 进行匹配后响应（query 条件与模版取值）
+- [x] 提供 Body 模版，然后特殊处理后，再进行响应（body.type: template，{{query.*}}/{{body.$.path}} 占位符渲染）
 
 ## 开发路线图
 

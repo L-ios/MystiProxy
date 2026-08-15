@@ -121,7 +121,7 @@ impl HttpRequestHandler {
     }
 }
 
-fn build_mock_response(location: &LocationConfig) -> MockResponse {
+fn build_mock_response(location: &LocationConfig, uri: &str) -> MockResponse {
     let mut mock = MockResponse::new();
 
     if let Some(response) = &location.response {
@@ -138,10 +138,18 @@ fn build_mock_response(location: &LocationConfig) -> MockResponse {
         }
 
         if let Some(body) = &response.body {
-            if let Some(body_type) = &body.body_type {
-                if body_type == &crate::config::BodyType::Static {
-                    mock = mock.body(String::new());
+            match body.body_type.as_ref() {
+                Some(crate::config::BodyType::Static) => {
+                    // 静态内容：优先 content（新增），向后兼容空体
+                    let content = body.content.clone().unwrap_or_default();
+                    mock = mock.body(content);
                 }
+                Some(crate::config::BodyType::Template) => {
+                    // 模版：基于请求 URI 渲染占位符（body 上下文由条件网关按需注入，见 handler）
+                    let tpl = body.template.clone().unwrap_or_default();
+                    mock = mock.body(crate::mock::render_template(&tpl, uri, None));
+                }
+                _ => {}
             }
         }
     }
@@ -214,6 +222,8 @@ async fn apply_request_modifications(
                         let transform_config = crate::config::BodyConfig {
                             json: Some(json_config.clone()),
                             body_type: None,
+                            content: None,
+                            template: None,
                         };
                         if let Err(e) = crate::http::body::BodyTransformer::transform(
                             &mut json_value,
@@ -387,50 +397,83 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                 debug!("Authentication successful: {:?}", auth_result.user);
             }
 
-            let route_match = match router.match_uri(&path) {
-                Some((route, match_result)) => {
-                    let location = &route.location_config;
-                    let provider = location.provider.as_ref().unwrap_or(&ProviderType::Proxy);
-                    // 前缀匹配时剥离 location 前缀，得到相对静态根目录的子路径
-                    let stripped_path = match match_result.remaining.as_deref() {
-                        Some(remaining) if !remaining.is_empty() => {
-                            format!("/{}", remaining.trim_start_matches('/'))
+            // 依序遍历候选 location：mock 条件不命中时回退下一候选，其余 provider 保持第一命中语义
+            let mut route_match: Option<RouteMatch> = None;
+            for (route, _match_result) in router.match_uri_candidates(&path) {
+                let location = &route.location_config;
+                let provider = location.provider.as_ref().unwrap_or(&ProviderType::Proxy);
+                match provider {
+                    ProviderType::Mock => {
+                        let conditions: Vec<crate::mock::Condition> = location
+                            .response
+                            .as_ref()
+                            .and_then(|r| r.conditions.as_ref())
+                            .map(|cs| {
+                                cs.iter()
+                                    .map(|c| crate::mock::Condition {
+                                        condition_type: c.condition_type.clone(),
+                                        value: c.value.clone(),
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+
+                        if conditions.is_empty()
+                            || crate::mock::MockBuilder::matches_conditions(
+                                &req.uri().to_string(),
+                                req.headers(),
+                                None,
+                                &conditions,
+                            )
+                        {
+                            let mock = build_mock_response(location, &req.uri().to_string());
+                            route_match = Some(RouteMatch::Mock(mock));
+                            break;
                         }
-                        _ => "/".to_string(),
-                    };
-                    match provider {
-                        ProviderType::Proxy => RouteMatch::Proxy {
+                        // 条件不命中：尝试下一候选
+                        debug!(
+                            "Mock conditions not matched for location {}, trying next",
+                            location.location
+                        );
+                    }
+                    ProviderType::Proxy => {
+                        route_match = Some(RouteMatch::Proxy {
                             target: config.target.clone(),
                             location: Some(location.clone()),
-                        },
-                        ProviderType::Mock => {
-                            let mock = build_mock_response(location);
-                            RouteMatch::Mock(mock)
+                        });
+                        break;
+                    }
+                    ProviderType::Static => {
+                        let root = location.root.clone().unwrap_or_else(|| ".".to_string());
+                        let mut sf_config = StaticFileConfig {
+                            root: PathBuf::from(root),
+                            ..Default::default()
+                        };
+                        if let Some(ref index_files) = location.index_files {
+                            sf_config.index_files = index_files.clone();
                         }
-                        ProviderType::Static => {
-                            let root = location.root.clone().unwrap_or_else(|| ".".to_string());
-                            let mut sf_config = StaticFileConfig {
-                                root: PathBuf::from(root),
-                                ..Default::default()
-                            };
-                            if let Some(ref index_files) = location.index_files {
-                                sf_config.index_files = index_files.clone();
-                            }
-                            if let Some(enable) = location.enable_directory_listing {
-                                sf_config.enable_directory_listing = enable;
-                            }
-                            RouteMatch::Static {
-                                config: sf_config,
-                                path: stripped_path,
-                            }
+                        if let Some(enable) = location.enable_directory_listing {
+                            sf_config.enable_directory_listing = enable;
                         }
+                        // 前缀匹配时剥离 location 前缀（与上游 09312dd 语义一致）
+                        let stripped = match _match_result.remaining.as_deref() {
+                            Some(remaining) if !remaining.is_empty() => {
+                                format!("/{}", remaining.trim_start_matches('/'))
+                            }
+                            _ => "/".to_string(),
+                        };
+                        route_match = Some(RouteMatch::Static {
+                            config: sf_config,
+                            path: stripped,
+                        });
+                        break;
                     }
                 }
-                None => RouteMatch::Proxy {
-                    target: config.target.clone(),
-                    location: None,
-                },
-            };
+            }
+            let route_match = route_match.unwrap_or(RouteMatch::Proxy {
+                target: config.target.clone(),
+                location: None,
+            });
 
             match route_match {
                 RouteMatch::Proxy { target, location } => {
@@ -661,7 +704,7 @@ mod tests {
             enable_directory_listing: None,
         };
 
-        let mock = build_mock_response(&location);
+        let mock = build_mock_response(&location, "/test");
         assert_eq!(mock.status, 200);
     }
 

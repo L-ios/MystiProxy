@@ -212,6 +212,19 @@ pub struct ResponseConfig {
     /// 响应体
     #[serde(default)]
     pub body: Option<BodyConfig>,
+    /// 命中条件（多条件 AND；不命中则回退下一 location）
+    #[serde(default)]
+    pub conditions: Option<Vec<ConditionCfg>>,
+}
+
+/// Mock 命中条件（配置面）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConditionCfg {
+    /// uri | path | query | header | body | json
+    #[serde(rename = "condition_type")]
+    pub condition_type: String,
+    /// 匹配值
+    pub value: String,
 }
 
 /// 请求配置
@@ -251,6 +264,12 @@ pub struct BodyConfig {
     /// 类型
     #[serde(default, rename = "type")]
     pub body_type: Option<BodyType>,
+    /// 静态内容（type=static 时生效）
+    #[serde(default)]
+    pub content: Option<String>,
+    /// 模版字符串（type=template 时生效）
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 /// JSON 请求体配置
@@ -287,6 +306,8 @@ pub enum BodyType {
     Static,
     /// JSON 类型
     Json,
+    /// 模版类型（占位符替换）
+    Template,
 }
 
 /// 自定义 Duration 反序列化函数（支持 Option<Duration>）

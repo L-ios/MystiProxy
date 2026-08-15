@@ -248,6 +248,7 @@ fn test_e2e_config_serialization_round_trip() {
                 status: Some(204),
                 headers: None,
                 body: None,
+                conditions: None,
             }),
             request: None,
             index_files: None,
@@ -375,8 +376,11 @@ fn test_e2e_build_config_from_structs() {
                                 headers: None,
                                 body: Some(BodyConfig {
                                     json: None,
+                                    content: None,
+                                    template: None,
                                     body_type: Some(BodyType::Static),
                                 }),
+                                conditions: None,
                             }),
                             request: Some(RequestConfig {
                                 method: None,

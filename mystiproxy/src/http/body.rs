@@ -471,6 +471,8 @@ mod tests {
                 action: JsonBodyAction::Overwrite,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();
@@ -494,6 +496,8 @@ mod tests {
                 action: JsonBodyAction::Overwrite,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();
@@ -515,6 +519,8 @@ mod tests {
                 action: JsonBodyAction::Delete,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();
@@ -535,6 +541,8 @@ mod tests {
                 action: JsonBodyAction::Overwrite,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();
@@ -599,6 +607,8 @@ mod tests {
                 action: JsonBodyAction::Overwrite,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();
@@ -617,6 +627,8 @@ mod tests {
                 action: JsonBodyAction::Overwrite,
             }),
             body_type: None,
+            content: None,
+            template: None,
         };
 
         BodyTransformer::transform(&mut body, &config).unwrap();

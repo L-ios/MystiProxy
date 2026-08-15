@@ -105,14 +105,22 @@ impl Router {
         self.routes.push(route);
     }
 
-    /// 匹配 URI
+    /// 匹配 URI（返回第一个命中；保持既有 API）
     pub fn match_uri(&self, uri: &str) -> Option<(&Route, MatchResult)> {
+        self.match_uri_candidates(uri).into_iter().next()
+    }
+
+    /// 匹配 URI，返回全部候选（配置顺序）
+    ///
+    /// 供 mock 条件回退使用：第一个 mock 条件不命中时可尝试后续同路径 location。
+    pub fn match_uri_candidates(&self, uri: &str) -> Vec<(&Route, MatchResult)> {
+        let mut out = Vec::new();
         for route in &self.routes {
             if let Some(result) = self.match_route(route, uri) {
-                return Some((route, result));
+                out.push((route, result));
             }
         }
-        None
+        out
     }
 
     /// 根据路由模式匹配 URI
