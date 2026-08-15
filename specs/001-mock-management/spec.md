@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-mock-management`  
 **Created**: 2026-02-28  
-**Status**: Draft  
+**Status**: Implemented (2026-08-15)  
 **Input**: User description: "http mock能力需要一个管理系统，现在做一个管理mock数据的管理系统"
 
 ## Clarifications

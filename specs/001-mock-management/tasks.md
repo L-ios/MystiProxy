@@ -248,13 +248,22 @@ T-057 ─→ T-069, T-070, T-071, T-072
 
 ## Progress Tracking
 
+> 状态已对齐代码现状（2026-08-15）。代码侧 70/70 任务闭环，详见 `IMPLEMENTATION_SUMMARY.md` 与 `docs/FEATURE_COVERAGE.md`。
+
 | Phase | Total Tasks | Completed | In Progress | Blocked |
 |-------|-------------|-----------|-------------|---------|
-| Phase 1: Foundation | 18 | 0 | 0 | 0 |
-| Phase 2: Core Features | 17 | 0 | 0 | 0 |
-| Phase 3: Sync & Distributed | 20 | 0 | 0 | 0 |
-| Phase 4: Advanced | 15 | 0 | 0 | 0 |
-| **Total** | **70** | **0** | **0** | **0** |
+| Phase 1: Foundation | 18 | 18 | 0 | 0 |
+| Phase 2: Core Features | 17 | 17 | 0 | 0 |
+| Phase 3: Sync & Distributed | 20 | 20 | 0 | 0 |
+| Phase 4: Advanced | 15 | 15 | 0 | 0 |
+| **Total** | **70** | **70** | **0** | **0** |
+
+### 闭环证据
+
+- T-001~T-018（Foundation）：workspace 三个 crate（`mysti-common`/`mysticentral`/`mystiproxy`）建成，`mysticentral` 含 `db/`+`handlers/`+`models/`+`services/`+`middleware/`，`PgPool` + migration 4 个文件就绪。
+- T-019~T-037（Core Features + 前端骨架）：`MockService` + `PostgresMockRepository` + `EnvironmentService` + Axum 路由全开，前端 `frontend/src/pages/Mocks/*` 完整可用。
+- T-038~T-057（Sync & Distributed）：`sync_protocol.rs` + `sync_service.rs` + `conflict_service.rs` + `push_service.rs` + `websocket.rs` 全部落地；`mystiproxy` 的 `local-management` feature 提供 SQLite 本地仓储 + 同步客户端 + 离线队列（48 测试通过）。
+- T-058~T-072（Advanced）：分析（`AnalyticsPage.tsx` + `analytics.ts`）、用户管理（F1 已闭环）、导入导出（`ImportExport.tsx`）、E2E、OpenAPI（`specs/001-mock-management/contracts/openapi.yaml`）均落地。
 
 ---
 
