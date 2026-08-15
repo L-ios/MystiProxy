@@ -4,6 +4,22 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::time::Duration;
 
+pub mod loader;
+pub mod manager;
+pub mod security;
+pub mod user_interface;
+pub mod validation;
+pub mod watcher;
+
+pub use loader::{ConfigSource, EnhancedConfigLoader, ValidationLevel};
+pub use manager::{ConfigChangeEvent, ConfigSnapshot, ConfigurationManager};
+pub use security::SecurityValidator;
+pub use user_interface::ConfigUserInterface;
+pub use validation::{
+    validate_cidr, validate_engine_config, ConfigValidationError, ValidationResult,
+};
+pub use watcher::start_config_watcher;
+
 /// 顶层配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MystiConfig {
@@ -392,6 +408,14 @@ impl MystiConfig {
     pub fn from_yaml(yaml: &str) -> crate::Result<Self> {
         let config: MystiConfig = serde_yaml::from_str(yaml)?;
         Ok(config)
+    }
+
+    /// 加载并验证配置（使用增强加载器）
+    pub fn load_validated(path: &str) -> crate::Result<Self> {
+        let loader = EnhancedConfigLoader::new().add_source(ConfigSource::File(path.to_string()));
+        loader
+            .load::<Self>()
+            .map_err(|e: ConfigValidationError| crate::MystiProxyError::Config(e.to_string()))
     }
 }
 
