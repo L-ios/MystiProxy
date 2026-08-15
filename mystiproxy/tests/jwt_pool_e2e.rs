@@ -14,39 +14,6 @@ use mystiproxy::http::{AuthConfig, AuthType, Authenticator, HttpClientPool};
 // JWT Authentication tests
 // ===========================================================================
 
-async fn get_available_port() -> u16 {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("bind failed");
-    listener.local_addr().expect("no addr").port()
-}
-
-async fn start_upstream_ok() -> u16 {
-    let port = get_available_port().await;
-    tokio::spawn(async move {
-        let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{port}"))
-            .await
-            .expect("upstream bind failed");
-        loop {
-            if let Ok((mut stream, _)) = listener.accept().await {
-                tokio::spawn(async move {
-                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-                    let mut buf = vec![0u8; 8192];
-                    let _ = stream.read(&mut buf).await;
-                    let body = "JWT OK";
-                    let resp = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                        body.len()
-                    );
-                    let _ = stream.write_all(resp.as_bytes()).await;
-                });
-            }
-        }
-    });
-    tokio::time::sleep(Duration::from_millis(30)).await;
-    port
-}
-
 /// Generate a valid JWT token for testing
 fn make_jwt_token(secret: &str, sub: &str) -> String {
     use jsonwebtoken::{encode, EncodingKey, Header};

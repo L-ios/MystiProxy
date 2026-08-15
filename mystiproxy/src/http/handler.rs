@@ -140,7 +140,7 @@ fn build_mock_response(location: &LocationConfig, uri: &str) -> MockResponse {
         if let Some(body) = &response.body {
             match body.body_type.as_ref() {
                 Some(crate::config::BodyType::Static) => {
-                    // 静态内容：优先 content（新增），向后兼容空体
+                    // 静态内容：优先 content，向后兼容空体
                     let content = body.content.clone().unwrap_or_default();
                     mock = mock.body(content);
                 }
@@ -149,7 +149,12 @@ fn build_mock_response(location: &LocationConfig, uri: &str) -> MockResponse {
                     let tpl = body.template.clone().unwrap_or_default();
                     mock = mock.body(crate::mock::render_template(&tpl, uri, None));
                 }
-                _ => {}
+                _ => {
+                    // 未指定类型但给了 content：同样作为静态体返回（与 config.example.yaml 对齐）
+                    if let Some(content) = &body.content {
+                        mock = mock.body(content.clone());
+                    }
+                }
             }
         }
     }
@@ -480,7 +485,11 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                     info!("Proxying request to: {}", target);
 
                     let client = client_pool
-                        .get_or_create(target.clone(), config.request_timeout)
+                        .get_or_create_with_upstream(
+                            target.clone(),
+                            config.request_timeout,
+                            config.upstream.as_deref(),
+                        )
                         .await;
 
                     // Get response parts + body bytes, handling both Incoming and Bytes body types

@@ -237,13 +237,48 @@ impl HttpClientPool {
         target: String,
         timeout: Option<Duration>,
     ) -> Arc<HttpClient> {
+        self.get_or_create_with_upstream(target, timeout, None)
+            .await
+    }
+
+    /// 获取或创建 HTTP 客户端（指定上游代理）
+    ///
+    /// upstream 仅在新建 client 时生效；同 target 复用已有 client。
+    /// upstream 字符串格式：`http://host:port`。
+    pub async fn get_or_create_with_upstream(
+        &self,
+        target: String,
+        timeout: Option<Duration>,
+        upstream: Option<&str>,
+    ) -> Arc<HttpClient> {
+        let upstream_config = upstream.map(|u| {
+            let stripped = u
+                .trim_start_matches("http://")
+                .trim_start_matches("https://");
+            let (host, port) = match stripped.rsplit_once(':') {
+                Some((h, p)) => (h.to_string(), p.parse().unwrap_or(8080)),
+                None => (stripped.to_string(), 8080),
+            };
+            crate::http::upstream::UpstreamProxyConfig {
+                host,
+                port,
+                protocol: crate::http::upstream::UpstreamProtocol::Http,
+                auth: None,
+                connect_timeout: std::time::Duration::from_secs(10),
+                tls_verify: true,
+                tls_ca_cert: None,
+                tls_client_cert: None,
+                tls_client_key: None,
+                ntlm_config: None,
+            }
+        });
         let mut clients = self.clients.lock().await;
         for client in clients.iter() {
             if client.target() == target {
                 return client.clone();
             }
         }
-        let client = Arc::new(HttpClient::new(target.clone(), timeout, None));
+        let client = Arc::new(HttpClient::new(target.clone(), timeout, upstream_config));
         clients.push(client.clone());
         info!("Created new HTTP client for {}", target);
         client
