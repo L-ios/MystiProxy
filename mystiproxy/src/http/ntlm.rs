@@ -4,7 +4,7 @@
 //!
 //! NTLM 是一种挑战-响应认证协议，常用于企业代理服务器
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use des::cipher::{BlockEncrypt, KeyInit};
@@ -478,10 +478,16 @@ fn compute_ntlmv2_hash(ntlm_hash: &[u8; 16], username: &str, domain: &str) -> [u
 }
 
 /// 获取 NTLM 时间戳
+///
+/// 当系统时钟被回拨到 UNIX_EPOCH 之前时（例如 BIOS 时钟错误、NTP 校时异常），
+/// `duration_since(UNIX_EPOCH)` 会返回 `Err`。此处使用 `unwrap_or(Duration::ZERO)`
+/// 将时钟异常视为 0 纳秒，避免进程 panic，时间戳会落到 NTLM epoch 起点。
+/// 这是一种防御性降级：时钟异常时 NTLM 认证仍可继续，最坏情况是时间戳字段异常，
+/// 由对端代理拒绝认证，而非本进程崩溃。
 fn get_ntlm_timestamp() -> [u8; 8] {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or(Duration::ZERO)
         .as_nanos() as u64;
 
     // NTLM timestamp is 100-nanosecond intervals since Jan 1, 1601
@@ -536,5 +542,23 @@ mod tests {
         assert_eq!(config.domain, "DOMAIN");
         assert_eq!(config.workstation, "WORKSTATION");
         assert_eq!(config.version, NtlmVersion::V2);
+    }
+
+    #[test]
+    fn test_get_ntlm_timestamp_does_not_panic_on_clock_rollback() {
+        // 该测试验证函数不会 panic，并返回 8 字节时间戳。
+        // 我们无法在测试中真正模拟系统时钟回拨，但 unwrap_or(Duration::ZERO) 的存在
+        // 确保了即便 duration_since 返回 Err 也不会 panic。
+        let ts = get_ntlm_timestamp();
+        assert_eq!(ts.len(), 8);
+
+        // NTLM epoch offset (134774 days in 100ns intervals) 应该始终被加入，
+        // 所以即便系统时钟异常，时间戳也应该大于等于 ntlm_epoch_offset。
+        let ntlm_epoch_offset: u64 = 134_774 * 24 * 60 * 60 * 10_000_000;
+        let ts_value = u64::from_le_bytes(ts);
+        assert!(
+            ts_value >= ntlm_epoch_offset,
+            "timestamp should at least include NTLM epoch offset"
+        );
     }
 }

@@ -115,8 +115,9 @@ impl UriMapping {
     }
 
     #[allow(dead_code)]
-    fn uri_variable(uri: &str) -> HashMap<String, UriVariable> {
-        let re = Regex::new(r"/\{(\w+):?([^}]*)}").unwrap(); // 改进：可能存在特殊情况，需要修改正则表达式
+    fn uri_variable(uri: &str) -> Result<HashMap<String, UriVariable>, regex::Error> {
+        // Hardcoded literal regex: always valid. Kept as expect() for clarity.
+        let re = Regex::new(r"/\{(\w+):?([^}]*)}").expect("hardcoded regex literal is valid");
         let mut variable_patterns = HashMap::new();
         let mut index = 1;
         for cap in re.captures_iter(uri) {
@@ -133,14 +134,14 @@ impl UriMapping {
             let variable = UriVariable {
                 name: cap[1].to_string(),
                 pattern,
-                regex: Regex::new(regex).unwrap(),
+                regex: Regex::new(regex)?,
                 index,
             };
             variable_patterns.insert(variable.name.clone(), variable);
             index += 1;
         }
 
-        variable_patterns
+        Ok(variable_patterns)
     }
 
     /// # uri的匹配模式
@@ -169,7 +170,7 @@ impl UriMapping {
             return Some(UriMatch::Prefix);
         }
 
-        let variable_patterns = Self::uri_variable(self.uri.as_str());
+        let variable_patterns = Self::uri_variable(self.uri.as_str()).ok()?;
         if variable_patterns.is_empty() {
             // 前缀匹配
             let prefix_uri = if self.uri.ends_with("/") {
@@ -194,7 +195,7 @@ impl UriMapping {
         }
 
         // 构造正则表达式并尝试匹配
-        let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).unwrap();
+        let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).ok()?;
         let mut match_var = HashMap::new();
         if regex.is_match(in_uri) {
             let mut end = 0;
@@ -225,12 +226,13 @@ impl UriMapping {
     }
 
     pub fn build_target_uri(&self, in_uri: &str) -> Option<String> {
-        match self.match_uri(in_uri).unwrap() {
+        let matched = self.match_uri(in_uri)?;
+        match matched {
             UriMatch::Exact => Some(self.target_uri.clone()),
             UriMatch::Prefix => Some(in_uri.replace(self.uri.as_str(), self.target_uri.as_str())),
             // UriMatch::Prefix => Some(in_uri.to_string()),
             UriMatch::Variable | UriMatch::VariablePrefix => {
-                let in_map = Self::uri_variable(self.uri.as_str());
+                let in_map = Self::uri_variable(self.uri.as_str()).ok()?;
                 // 处理路径变量，支持变量后面跟正则表达式，并识别带路径的前缀匹配
                 let mut processed_base_uri = self.uri.clone();
                 for regex_pattern in in_map.values() {
@@ -241,11 +243,9 @@ impl UriMapping {
                 }
 
                 // 构造正则表达式并尝试匹配
-                let rest = Regex::new(&processed_base_uri)
-                    .unwrap()
-                    .replace(in_uri, "")
-                    .to_string();
-                let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).unwrap();
+                let rest_regex = Regex::new(&processed_base_uri).ok()?;
+                let rest = rest_regex.replace(in_uri, "").to_string();
+                let regex = Regex::new(&format!("^{processed_base_uri}\\/?.*$")).ok()?;
                 let mut match_var = HashMap::new();
 
                 for cap in regex.captures_iter(in_uri) {
@@ -263,12 +263,12 @@ impl UriMapping {
 
                 // 通过遍历map，转移target
                 let mut target_uri = self.target_uri.clone();
-                let out_map = Self::uri_variable(self.target_uri.as_str());
+                let out_map = Self::uri_variable(self.target_uri.as_str()).ok()?;
                 for regex_pattern in out_map.values() {
                     let name = regex_pattern.name.as_str();
                     match in_map.get(name) {
                         Some(variable) => {
-                            let path = match_var.get(&variable.index).unwrap();
+                            let path = match_var.get(&variable.index)?;
                             target_uri = target_uri.replace(&regex_pattern.origin(), path);
                         }
                         _ => {
@@ -375,5 +375,45 @@ mod tests {
         } else {
             None
         }
+    }
+
+    /// Regression: build_target_uri must NOT panic when match_uri returns None.
+    /// Previously `match self.match_uri(in_uri).unwrap()` would panic on any
+    /// non-matching input, even though the function signature is `Option<String>`.
+    #[test]
+    fn test_build_target_uri_returns_none_on_mismatch() {
+        let mapping = UriMapping {
+            uri: "/api/users/{id:[0-9]+}".to_string(),
+            target_uri: "/v1/users/{id}".to_string(),
+            ..Default::default()
+        };
+        // "/api/users/abc" does not match `{id:[0-9]+}`, so match_uri returns None.
+        // build_target_uri must propagate None instead of panicking.
+        assert_eq!(mapping.build_target_uri("/api/users/abc"), None);
+    }
+
+    /// Regression: match_uri must NOT panic when the configured URI pattern
+    /// contains an invalid regex (e.g. unclosed `[`). Previously
+    /// `Regex::new(regex).unwrap()` inside `uri_variable` would panic.
+    #[test]
+    fn test_match_uri_returns_none_on_invalid_regex_pattern() {
+        // `[invalid` is not a valid regex (unclosed character class).
+        let mapping = UriMapping {
+            uri: "/api/{id:[invalid}".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(mapping.match_uri("/api/x"), None);
+    }
+
+    /// `uri_variable` should return an Err for invalid regex patterns,
+    /// allowing callers to fail gracefully instead of panicking.
+    #[test]
+    fn test_uri_variable_returns_err_on_bad_regex() {
+        // `[invalid` is not a valid regex (unclosed character class).
+        let result = UriMapping::uri_variable("/api/{name:[invalid}");
+        assert!(
+            result.is_err(),
+            "uri_variable should return Err on invalid regex, got: {result:?}"
+        );
     }
 }

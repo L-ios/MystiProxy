@@ -69,7 +69,8 @@ impl WebSocketBroadcaster {
             "config": config
         });
 
-        let msg_str = serde_json::to_string(&message).unwrap();
+        // message 由 json! 宏构造，序列化 serde_json::Value 不会失败
+        let msg_str = serde_json::to_string(&message).expect("serializing json! value cannot fail");
         self.broadcast_message(&msg_str).await;
     }
 
@@ -81,7 +82,8 @@ impl WebSocketBroadcaster {
             "id": config_id
         });
 
-        let msg_str = serde_json::to_string(&message).unwrap();
+        // message 由 json! 宏构造，序列化 serde_json::Value 不会失败
+        let msg_str = serde_json::to_string(&message).expect("serializing json! value cannot fail");
         self.broadcast_message(&msg_str).await;
     }
 
@@ -167,8 +169,11 @@ async fn handle_socket(socket: WebSocket, _pool: PgPool, broadcaster: Arc<WebSoc
         "instance_id": instance_id,
         "server_time": chrono::Utc::now().to_rfc3339()
     });
+    // welcome 由 json! 宏构造，序列化 serde_json::Value 不会失败
     let _ = tx
-        .send(Message::Text(serde_json::to_string(&welcome).unwrap()))
+        .send(Message::Text(
+            serde_json::to_string(&welcome).expect("serializing json! value cannot fail"),
+        ))
         .await;
 
     // Spawn a task to handle outgoing messages
@@ -225,8 +230,12 @@ async fn handle_incoming_message(
                 "type": "heartbeat_ack",
                 "server_time": chrono::Utc::now().to_rfc3339()
             });
+            // response 由 json! 宏构造，序列化 serde_json::Value 不会失败
             broadcaster
-                .send_to_client(&instance_id, &serde_json::to_string(&response).unwrap())
+                .send_to_client(
+                    &instance_id,
+                    &serde_json::to_string(&response).expect("serializing json! value cannot fail"),
+                )
                 .await;
         }
         "sync_request" => {
@@ -235,8 +244,12 @@ async fn handle_incoming_message(
                 "type": "sync_required",
                 "message": "Please use REST API for full sync"
             });
+            // response 由 json! 宏构造，序列化 serde_json::Value 不会失败
             broadcaster
-                .send_to_client(&instance_id, &serde_json::to_string(&response).unwrap())
+                .send_to_client(
+                    &instance_id,
+                    &serde_json::to_string(&response).expect("serializing json! value cannot fail"),
+                )
                 .await;
         }
         _ => {
@@ -248,6 +261,7 @@ async fn handle_incoming_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mysti_common::models::{HttpMethod, MatchingRules, MockConfiguration, ResponseConfig};
 
     #[tokio::test]
     async fn test_broadcaster() {
@@ -260,5 +274,62 @@ mod tests {
 
         broadcaster.remove_client(&Uuid::nil()).await;
         assert_eq!(broadcaster.client_count().await, 0);
+    }
+
+    /// Regression test for F7: broadcast_config_update must not panic when
+    /// serializing a `json!` value (previously called `.unwrap()`).
+    #[tokio::test]
+    async fn test_broadcast_config_update_does_not_panic() {
+        let broadcaster = WebSocketBroadcaster::new();
+        let config = MockConfiguration::new(
+            "test-mock".to_string(),
+            "/api/test".to_string(),
+            HttpMethod::Get,
+            MatchingRules::default(),
+            ResponseConfig::default(),
+        );
+
+        // Without any connected clients this should be a no-op,
+        // but must not panic during JSON serialization.
+        broadcaster.broadcast_config_update(&config).await;
+    }
+
+    /// Regression test for F7: broadcast_config_delete must not panic when
+    /// serializing a `json!` value (previously called `.unwrap()`).
+    #[tokio::test]
+    async fn test_broadcast_config_delete_does_not_panic() {
+        let broadcaster = WebSocketBroadcaster::new();
+
+        // No clients connected; serialize + broadcast must not panic.
+        broadcaster.broadcast_config_delete(Uuid::new_v4()).await;
+    }
+
+    /// Regression test for F7: send_to_client should propagate the serialized
+    /// message to a connected client without panicking on serialization.
+    #[tokio::test]
+    async fn test_send_to_client_serializes_without_panic() {
+        let broadcaster = WebSocketBroadcaster::new();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(32);
+        let instance_id = Uuid::new_v4();
+        broadcaster.add_client(instance_id, tx).await;
+
+        // Manually serializing a json! value (the pattern used in
+        // handle_incoming_message) must not panic.
+        let response = serde_json::json!({
+            "type": "heartbeat_ack",
+            "server_time": chrono::Utc::now().to_rfc3339()
+        });
+        let serialized =
+            serde_json::to_string(&response).expect("serializing json! value cannot fail");
+        let sent = broadcaster.send_to_client(&instance_id, &serialized).await;
+
+        assert!(sent, "message should be delivered to connected client");
+        let received = rx.recv().await.expect("client should receive message");
+        match received {
+            Message::Text(t) => {
+                assert!(t.contains("heartbeat_ack"), "received: {t}");
+            }
+            other => panic!("expected Text message, got: {other:?}"),
+        }
     }
 }
