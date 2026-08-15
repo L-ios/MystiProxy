@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use bytes::Bytes;
+use http_body::Body as HttpBody;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper::service::Service;
@@ -275,11 +276,16 @@ impl HttpProxyService {
         }
     }
 
-    /// 处理普通 HTTP 请求
-    async fn handle_http_request(
+    /// 处理普通 HTTP 请求（支持任意 body 类型）
+    async fn handle_http_request<B>(
         config: Arc<HttpProxyConfig>,
-        req: Request<Incoming>,
-    ) -> Result<Response<BoxBody>> {
+        req: Request<B>,
+    ) -> Result<Response<BoxBody>>
+    where
+        B: HttpBody<Data = Bytes, Error: Into<Box<dyn std::error::Error + Send + Sync>>>
+            + Send
+            + 'static,
+    {
         let uri = req.uri().clone();
         let method = req.method().clone();
         let host = uri.host().unwrap_or("unknown");
@@ -338,9 +344,8 @@ impl HttpProxyService {
 
         new_request = new_request.header("Connection", "close");
 
-        let new_request = new_request
-            .body(req.into_body())
-            .map_err(MystiProxyError::Http)?;
+        let (parts, body) = req.into_parts();
+        let new_request = new_request.body(body).map_err(MystiProxyError::Http)?;
 
         let response =
             tokio::time::timeout(config.request_timeout, sender.send_request(new_request))
@@ -443,10 +448,8 @@ impl HttpProxyAcceptor {
         }
     }
 
-    /// 处理客户端连接（支持 CONNECT 隧道）
-    pub async fn handle_connection(&self, stream: tokio::net::TcpStream) -> Result<()> {
-        let mut client_stream = stream;
-
+    /// 处理客户端连接（支持 CONNECT 隧道和普通 HTTP 代理请求）
+    pub async fn handle_connection(&self, mut client_stream: tokio::net::TcpStream) -> Result<()> {
         let mut buf = vec![0u8; 8192];
         let n = tokio::time::timeout(self.config.request_timeout, client_stream.read(&mut buf))
             .await
@@ -469,10 +472,13 @@ impl HttpProxyAcceptor {
 
         let method = parts[0];
         let target = parts[1];
+        let _version = parts[2]; // HTTP version
 
         let mut headers = HashMap::new();
-        for line in &lines[1..] {
+        let mut header_end = 0;
+        for (i, line) in lines.iter().enumerate().skip(1) {
             if line.is_empty() {
+                header_end = i + 1;
                 break;
             }
             if let Some((key, value)) = line.split_once(':') {
@@ -480,6 +486,7 @@ impl HttpProxyAcceptor {
             }
         }
 
+        // 认证
         if let Some(user) = self.authenticate(&headers) {
             log_debug!("Proxy authenticated as user: {}", user);
         } else {
@@ -491,16 +498,114 @@ impl HttpProxyAcceptor {
             return Ok(());
         }
 
+        // CONNECT 方法：建立 TLS 隧道
         if method == "CONNECT" {
-            self.handle_connect(target, client_stream).await
-        } else {
-            let response = "HTTP/1.1 400 Bad Request\r\n\r\nUse HTTP proxy for HTTP requests";
-            client_stream
-                .write_all(response.as_bytes())
-                .await
-                .map_err(MystiProxyError::Io)?;
-            Ok(())
+            return self.handle_connect(target, client_stream).await;
         }
+
+        // 非 CONNECT 方法：检查是否为绝对 URI（HTTP 代理标准形态）
+        // 形如 GET http://host:port/path HTTP/1.1
+        let target_uri = match Uri::try_from(target) {
+            Ok(uri) if uri.scheme().is_some() && uri.host().is_some() => {
+                // 这是绝对 URI 请求，转发给目标
+                uri
+            }
+            _ => {
+                // 相对路径请求（如 GET /path）在正向代理语义下无 Host 可寻
+                // 返回 400 Bad Request，这符合 RFC 7230
+                let response = "HTTP/1.1 400 Bad Request\r\n\r\nInvalid request target for forward proxy: absolute URI required";
+                client_stream
+                    .write_all(response.as_bytes())
+                    .await
+                    .map_err(MystiProxyError::Io)?;
+                return Ok(());
+            }
+        };
+
+        // 解析完整的 HTTP 请求头（用于重建请求）
+        let mut header_bytes = Vec::new();
+        for line in &lines[1..header_end] {
+            header_bytes.extend_from_slice(line.as_bytes());
+            header_bytes.extend_from_slice(b"\r\n");
+        }
+        header_bytes.extend_from_slice(b"\r\n");
+
+        // 读取请求体（如果有）
+        let body_start = header_bytes.len() + request_line.len() + 2; // +2 for \r\n
+        let body = if body_start < buf[..n].len() {
+            buf[body_start..n].to_vec()
+        } else {
+            Vec::new()
+        };
+
+        // 重建完整请求用于转发
+        let request_uri = target_uri.clone();
+        let mut request_builder = Request::builder().method(method).uri(request_uri);
+
+        // 复制头部（跳过 Proxy-Authorization 和 Proxy-Connection）
+        for (name, value) in &headers {
+            if *name != "proxy-authorization" && *name != "proxy-connection" {
+                request_builder = request_builder.header(name, value);
+            }
+        }
+
+        // 添加 Host 头（如果原请求没有）
+        if !headers.contains_key("host") {
+            if let (Some(host), Some(port)) = (target_uri.host(), target_uri.port_u16()) {
+                let host_header = if port == 80 || port == 443 {
+                    host.to_string()
+                } else {
+                    format!("{}:{}", host, port)
+                };
+                request_builder = request_builder.header("Host", host_header);
+            }
+        }
+
+        request_builder = request_builder.header("Connection", "close");
+
+        let request = request_builder
+            .body(http_body_util::Full::new(Bytes::from(body)))
+            .map_err(MystiProxyError::Http)?;
+
+        // 使用现有的 HttpProxyService::handle_http_request 处理转发
+        let config = self.config.clone();
+        let response = HttpProxyService::handle_http_request(config, request).await?;
+
+        // 将响应写回客户端
+        let (parts, body) = response.into_parts();
+        let mut response_bytes = Vec::new();
+
+        // 写状态行
+        let status_line = format!(
+            "HTTP/1.1 {} {}\r\n",
+            parts.status.as_u16(),
+            parts.status.canonical_reason().unwrap_or("")
+        );
+        response_bytes.extend_from_slice(status_line.as_bytes());
+
+        // 写头部
+        for (name, value) in parts.headers.iter() {
+            response_bytes.extend_from_slice(name.as_str().as_bytes());
+            response_bytes.extend_from_slice(b": ");
+            response_bytes.extend_from_slice(value.as_bytes());
+            response_bytes.extend_from_slice(b"\r\n");
+        }
+        response_bytes.extend_from_slice(b"\r\n");
+
+        // 写 body
+        let body_bytes = body
+            .collect()
+            .await
+            .map_err(|e| MystiProxyError::Hyper(e.to_string()))?
+            .to_bytes();
+        response_bytes.extend_from_slice(&body_bytes);
+
+        client_stream
+            .write_all(&response_bytes)
+            .await
+            .map_err(MystiProxyError::Io)?;
+
+        Ok(())
     }
 
     /// 认证
