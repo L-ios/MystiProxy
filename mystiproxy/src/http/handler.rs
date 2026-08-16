@@ -368,9 +368,12 @@ impl Service<Request<Incoming>> for HttpRequestHandler {
                 }
 
                 // WebSocket 真正代理：转发握手到 engine.target 并桥接
-                let response =
-                    crate::http::websocket::proxy_websocket(req, &config.target, config.request_timeout)
-                        .await?;
+                let response = crate::http::websocket::proxy_websocket(
+                    req,
+                    &config.target,
+                    config.request_timeout,
+                )
+                .await?;
 
                 let duration = start_time.elapsed();
                 metrics.record_http_request(&method, &path, response.status().as_u16(), duration);

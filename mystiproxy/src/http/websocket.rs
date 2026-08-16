@@ -54,7 +54,13 @@ pub async fn proxy_websocket(
     let subproto = header_str(req.headers(), header::SEC_WEBSOCKET_PROTOCOL);
 
     // 连接上游并完成握手（受 engine 超时约束）
-    let handshake = upstream_handshake(target, &path_query, &key, origin.as_deref(), subproto.as_deref());
+    let handshake = upstream_handshake(
+        target,
+        &path_query,
+        &key,
+        origin.as_deref(),
+        subproto.as_deref(),
+    );
     let (mut upstream_stream, upstream_headers) = match timeout {
         Some(t) => match tokio::time::timeout(t, handshake).await {
             Ok(Ok(v)) => v,
@@ -82,7 +88,10 @@ pub async fn proxy_websocket(
         .header(header::UPGRADE, "websocket")
         .header(header::CONNECTION, "upgrade")
         .header(header::SEC_WEBSOCKET_ACCEPT, accept);
-    for name in [header::SEC_WEBSOCKET_PROTOCOL, header::SEC_WEBSOCKET_EXTENSIONS] {
+    for name in [
+        header::SEC_WEBSOCKET_PROTOCOL,
+        header::SEC_WEBSOCKET_EXTENSIONS,
+    ] {
         if let Some(v) = upstream_headers.iter().find(|(n, _)| *n == name) {
             builder = builder.header(name, v.1.clone());
         }
@@ -146,7 +155,9 @@ async fn upstream_handshake(
     loop {
         let n = stream.read(&mut chunk).await?;
         if n == 0 {
-            return Err(MystiProxyError::Proxy("upstream closed during handshake".into()));
+            return Err(MystiProxyError::Proxy(
+                "upstream closed during handshake".into(),
+            ));
         }
         buf.extend_from_slice(&chunk[..n]);
         if let Some(pos) = find_header_end(&buf) {
@@ -172,7 +183,9 @@ async fn upstream_handshake(
             return Ok((stream, headers));
         }
         if buf.len() > 16 * 1024 {
-            return Err(MystiProxyError::Proxy("upstream handshake headers too large".into()));
+            return Err(MystiProxyError::Proxy(
+                "upstream handshake headers too large".into(),
+            ));
         }
     }
 }
@@ -194,10 +207,10 @@ fn bad_gateway(msg: &str) -> Result<Response<Empty<Infallible>>> {
         .header(header::CONNECTION, "close")
         .body(Empty::new())
         .unwrap_or_else(|_| Response::new(Empty::new())))
-        .map(|r: Response<Empty<Infallible>>| {
-            let _ = msg;
-            r
-        })
+    .map(|r: Response<Empty<Infallible>>| {
+        let _ = msg;
+        r
+    })
 }
 
 /// 计算 WebSocket 接受密钥
@@ -270,10 +283,7 @@ mod tests {
         assert!(req.contains("Origin: http://example.com"));
         assert!(req.contains("Sec-WebSocket-Protocol: chat.v2"));
         // 上游响应头解析
-        assert_eq!(
-            headers.get(header::SEC_WEBSOCKET_ACCEPT).unwrap(),
-            "abc"
-        );
+        assert_eq!(headers.get(header::SEC_WEBSOCKET_ACCEPT).unwrap(), "abc");
     }
 
     #[tokio::test]
