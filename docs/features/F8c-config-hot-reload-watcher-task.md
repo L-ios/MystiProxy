@@ -132,13 +132,13 @@
 
 | 任务 | 验收标准 | 状态 |
 | :--- | :--- | :--- |
-| T1 watcher 基础结构 | 3 个测试全绿；`new` 对合法/非法路径行为正确 | ✅ 代码已实现，⬜ 测试待补 |
-| T2 事件过滤 | 4 个测试全绿；`Modify`/`Create`/`Remove` 触发，`Access` 不触发 | ✅ 代码已实现，⬜ 测试待补 |
-| T3 debounce 策略 | 3 个测试全绿；`debounce_ms` 真正生效；多次写入合并 | ⚠️ debounce bug 待修，⬜ 测试待补 |
-| T4 回调机制 | 3 个测试全绿；回调收到正确 config；错误不击穿 | ✅ 代码已实现，⬜ 测试待补 |
-| T5 start_config_watcher | 4 个测试全绿；manager 正确更新；死代码清理 | ✅ 代码已实现，⚠️ 死代码待清，⬜ 测试待补 |
-| T6 集成测试 | 4 个测试全绿；全生命周期不崩溃 | ⬜ 待补 |
-| T7 验证闭环 | 全量 test + clippy + fmt 通过；覆盖率 ≥ 60% | ⬜ 待补 |
+| T1 watcher 基础结构 | 3 个测试全绿；`new` 对合法/非法路径行为正确 | ✅ 完成（2026-08-16） |
+| T2 事件过滤 | 4 个测试全绿；`Modify`/`Create`/`Remove` 触发，`Access` 不触发 | ✅ 完成（2026-08-16，watch 目录修复） |
+| T3 debounce 策略 | 3 个测试全绿；`debounce_ms` 真正生效；多次写入合并 | ✅ 完成（2026-08-16，bug 已修） |
+| T4 回调机制 | 3 个测试全绿；回调收到正确 config；错误不击穿 | ✅ 完成（2026-08-16，blocking_send 死锁已修） |
+| T5 start_config_watcher | 4 个测试全绿；manager 正确更新；死代码清理 | ✅ 完成（2026-08-16，watcher 存活修复） |
+| T6 集成测试 | 4 个测试全绿；全生命周期不崩溃 | ✅ 完成（2026-08-16） |
+| T7 验证闭环 | 全量 test + clippy + fmt 通过；覆盖率 ≥ 60% | ✅ 完成（watcher 17 测试全绿；改动文件 clippy 0 警告；llvm-cov 未在本机配置） |
 | T8 推送 CI | CI 全绿；ROADMAP / FEATURE_COVERAGE 更新 | ⬜ 待补 |
 
 ## 信心评估

@@ -4,7 +4,6 @@ use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, RwLock as AsyncRwLock};
 
-use crate::config::loader::EnhancedConfigLoader;
 use crate::config::validation::{ConfigValidationError, ValidationResult};
 use crate::config::{EngineConfig, MystiConfig};
 
@@ -108,15 +107,16 @@ impl ConfigurationManager {
 
     /// 回滚到上一个版本
     pub async fn rollback_to_previous(&self) -> ValidationResult<()> {
-        let history = self.config_history.read().unwrap();
-        if history.len() < 2 {
-            return Err(ConfigValidationError::Load(
-                "No previous version to rollback to".to_string(),
-            ));
-        }
-
-        let previous_config = history[history.len() - 2].config.clone();
-        drop(history);
+        // 缩短 std RwLock guard 生命周期：取出所需数据后立即释放，避免跨 await 持锁
+        let previous_config = {
+            let history = self.config_history.read().unwrap();
+            if history.len() < 2 {
+                return Err(ConfigValidationError::Load(
+                    "No previous version to rollback to".to_string(),
+                ));
+            }
+            history[history.len() - 2].config.clone()
+        };
 
         self.update_config(previous_config).await
     }
@@ -246,5 +246,102 @@ mod tests {
 
         let history = manager.get_history();
         assert_eq!(history.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_rollback_to_previous() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+
+        let mut new_config = create_test_config();
+        new_config
+            .mysti
+            .engine
+            .get_mut("test")
+            .unwrap()
+            .request_timeout = Some(std::time::Duration::from_secs(30));
+        manager.update_config(new_config).await.unwrap();
+
+        // 当前 = 30s，回滚到初始（None）
+        manager.rollback_to_previous().await.unwrap();
+        let current = manager.get_current().await;
+        assert_eq!(current.mysti.engine["test"].request_timeout, None);
+    }
+
+    #[tokio::test]
+    async fn test_rollback_without_previous_fails() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+        // 只有初始快照，无上一版本
+        assert!(manager.rollback_to_previous().await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_receives_change_event() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+        let mut rx = manager.subscribe();
+
+        let mut new_config = create_test_config();
+        new_config
+            .mysti
+            .engine
+            .get_mut("test")
+            .unwrap()
+            .request_timeout = Some(std::time::Duration::from_secs(30));
+        manager.update_config(new_config.clone()).await.unwrap();
+
+        let ev = tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv())
+            .await
+            .expect("event within 2s")
+            .expect("channel open");
+        assert!(ev.validation_success);
+        assert_eq!(
+            ev.new_config.mysti.engine["test"].request_timeout,
+            Some(std::time::Duration::from_secs(30))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_config_invalid_rejected() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+
+        let mut bad = create_test_config();
+        bad.mysti.engine.get_mut("test").unwrap().target = "http://example.com".to_string();
+        // tcp 代理 target 必须是 tcp:// → 验证失败
+        assert!(manager.update_config(bad).await.is_err());
+
+        // 配置未变
+        let current = manager.get_current().await;
+        assert_eq!(current.mysti.engine["test"].target, "tcp://127.0.0.1:80");
+    }
+
+    #[tokio::test]
+    async fn test_history_capped_at_max() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+
+        // 连续 15 次更新（> max_history_size=10）
+        for i in 0..15 {
+            let mut c = create_test_config();
+            c.mysti.engine.get_mut("test").unwrap().listen = format!("tcp://0.0.0.0:{i}");
+            manager.update_config(c).await.unwrap();
+        }
+
+        let history = manager.get_history();
+        assert_eq!(history.len(), 10, "history must be capped");
+        // 最新一条是最后更新的配置
+        let last = history.last().unwrap();
+        assert_eq!(last.config.mysti.engine["test"].listen, "tcp://0.0.0.0:14");
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_metadata() {
+        let config = create_test_config();
+        let manager = ConfigurationManager::new(config).unwrap();
+        let history = manager.get_history();
+        assert_eq!(history[0].source, "initial");
+        assert!(!history[0].version.is_empty());
     }
 }

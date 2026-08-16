@@ -4,7 +4,7 @@
 
 > 总体策略：先写失败测试（红），再实现加载器与管理器使测试转绿，最后做集成与闭环验证。加载器的 `ValidationLevel` 三档分支、管理器的每个公开方法独立 TDD，便于定位回归。
 >
-> **背景说明**：F8b 代码已实现（`loader.rs` + `manager.rs`），本任务清单是反向工程补齐的 TDD 视角规划。已实现部分标注"✅ 已实现"，未实现或测试覆盖不足的部分标注"⚠️ 待补全"。
+> **背景说明**：F8b 代码已实现（`loader.rs` + `manager.rs`），本任务清单是反向工程补齐的 TDD 视角规划。已实现部分标注"✅ 已实现"，未实现或测试覆盖不足的部分标注"✅ 已完成（2026-08-16）"。
 
 ### T1 加载器基础结构与 `ValidationLevel` TDD
 
@@ -14,7 +14,7 @@
 - [x] ✅ 已实现：实现 `Default` trait（`fn default() -> Self { Self::new() }`）
 - [x] ✅ 已实现：实现 `new()` / `with_validation_level(level)` / `add_source(source)` builder 方法
 - [x] ✅ 已实现：在 `mystiproxy/src/config/mod.rs` 新增 `pub mod loader;` 与 `pub use loader::{ConfigSource, EnhancedConfigLoader, ValidationLevel};`
-- [ ] ⚠️ 待补全：在 `loader.rs` 的 `#[cfg(test)] mod tests` 内补全模型层失败测试：
+- [ ] ✅ 已完成（2026-08-16）：在 `loader.rs` 的 `#[cfg(test)] mod tests` 内补全模型层失败测试：
   - `test_validation_level_default_is_strict`：`assert_eq!(EnhancedConfigLoader::new().validation_level, ValidationLevel::Strict)`（需暴露 `validation_level` 字段或加 getter）
   - `test_new_creates_empty_loader`：`new()` 后 `sources` 为空
   - `test_with_validation_level_changes_level`：`new().with_validation_level(Warning)` 后级别为 `Warning`
@@ -32,7 +32,7 @@
   - `config.try_deserialize::<T>()` 失败 → `ConfigValidationError::Parse`
 - [x] ✅ 已实现：`ConfigSource::Default` 经 `serde_json::to_string` 转 JSON 字符串，再 `File::from_str(json_str, FileFormat::Json)` 注入
 - [x] ✅ 已实现：`ConfigSource::Environment` 用 `Environment::with_prefix(prefix).separator("__")`
-- [ ] ⚠️ 待补全：多源合并失败测试：
+- [ ] ✅ 已完成（2026-08-16）：多源合并失败测试：
   - `test_load_single_file_valid`：单文件加载合法 `MystiConfig` → `Ok`
   - `test_load_file_not_found`：`ConfigSource::File("nonexistent.yaml")` → `Err(Load(...))`
   - `test_load_env_overrides_file`：文件 + 环境变量，环境变量覆盖文件字段
@@ -49,7 +49,7 @@
   - `Warning`：同上遍历，失败 `tracing::warn!("Engine '{}' validation warnings: {}", name, e)`，仍返回 `Ok(parsed)`
   - `None`：完全跳过验证，直接 `Ok(parsed)`
 - [x] ✅ 已实现：`load_mysti_config(path: &str) -> ValidationResult<MystiConfig>` 便捷方法（`new().add_source(File).load()`）
-- [ ] ⚠️ 待补全：验证级别分支失败测试：
+- [ ] ✅ 已完成（2026-08-16）：验证级别分支失败测试：
   - `test_load_strict_rejects_invalid_engine`：含非法 `target: "http://example.com"` + `proxy_type: Tcp` 的配置，`Strict` 下 `load` 返回 `Err(Validation(...))`
   - `test_load_warning_allows_invalid_engine`：同上配置，`Warning` 下 `load` 返回 `Ok`（验证失败仅 warn）
   - `test_load_none_skips_validation`：同上配置，`None` 下 `load` 返回 `Ok`，且不产生 warn 日志
@@ -62,7 +62,7 @@
 ### T4 加载器集成测试
 
 - [x] ✅ 已实现：现有测试 `test_load_valid_config` / `test_validate_engine_config_valid` / `test_validate_engine_config_invalid`（位于 `loader.rs:159-215`）
-- [ ] ⚠️ 待补全：端到端集成测试：
+- [ ] ✅ 已完成（2026-08-16）：端到端集成测试：
   - `test_load_multi_source_end_to_end`：`Default` + `File` + `Environment` 三源合并，验证最终配置字段来自最高优先级源
   - `test_load_strict_collects_first_error_only`：含 2 处错误的配置，`Strict` 下 `load` 返回的 `Err` 只含第一个错误（与 F8a 累积式不同，加载器是短路式）
   - `test_load_generic_type_not_mysti_config`：`load::<EngineConfig>` 加载子配置，验证逻辑静默跳过（无 `mysti.engine` 字段）
@@ -83,7 +83,7 @@
   - 调 `save_snapshot(&initial_config, "initial")` 保存初始快照
 - [x] ✅ 已实现：在 `mystiproxy/src/config/mod.rs` 新增 `pub mod manager;` 与 `pub use manager::{ConfigChangeEvent, ConfigSnapshot, ConfigurationManager};`
 - [x] ✅ 已实现：测试 `test_config_manager_creation`（位于 `manager.rs:197-203`）：`new(config)` 后 `get_current` 返回的配置 `engine.len() == 1`
-- [ ] ⚠️ 待补全：边界测试：
+- [ ] ✅ 已完成（2026-08-16）：边界测试：
   - `test_new_saves_initial_snapshot`：`new` 后 `get_history().len() == 1`，且 `history[0].source == "initial"`
   - `test_new_broadcast_channel_capacity`：`subscribe()` 返回的 Receiver 容量为 100（间接验证，如连续 `send` 100 次不阻塞）
 - [ ] `cargo test -p mystiproxy config::manager::tests test_config_manager_creation test_new` 验证全**绿**
@@ -102,7 +102,7 @@
   - 构造 `ConfigChangeEvent { old_config, new_config, timestamp: now, validation_success: true }`
   - `let _ = reload_notifier.send(event)`
 - [x] ✅ 已实现：测试 `test_config_update`（位于 `manager.rs:205-226`）：更新后 `get_current` 反映新 `request_timeout`
-- [ ] ⚠️ 待补全：边界与错误测试：
+- [ ] ✅ 已完成（2026-08-16）：边界与错误测试：
   - `test_update_config_rejects_invalid`：含非法 `target: "http://example.com"` + `proxy_type: Tcp` 的配置，`update_config` 返回 `Err(Validation(...))`，且 `get_current` 未变
   - `test_update_config_saves_reload_snapshot`：更新后 `get_history().len()` 增加 1，且最新快照 `source == "reload"`
   - `test_update_config_broadcasts_event`：`subscribe()` 后 `update_config`，Receiver 收到事件，`event.new_config` 匹配新配置
@@ -120,7 +120,7 @@
   - `previous_config = history[history.len() - 2].config.clone()`
   - `drop(history)` 显式释放锁
   - `self.update_config(previous_config).await` 复用全流程
-- [ ] ⚠️ 待补全：失败测试：
+- [ ] ✅ 已完成（2026-08-16）：失败测试：
   - `test_rollback_with_insufficient_history`：`new` 后立即 `rollback_to_previous`（历史仅 1 条）→ `Err(Load(...))`
   - `test_rollback_to_previous_success`：`new` + `update_config` 后 `rollback_to_previous`，`get_current` 等于 `history[0].config`
   - `test_rollback_adds_new_snapshot`：回滚后 `get_history().len()` 增加 1，最新快照 `source == "reload"`
@@ -134,7 +134,7 @@
 - [x] ✅ 已实现：实现 `get_history(&self) -> Vec<ConfigSnapshot>`（`config_history.read().unwrap().clone()`）
 - [x] ✅ 已实现：实现 `subscribe(&self) -> broadcast::Receiver<ConfigChangeEvent>`（`reload_notifier.subscribe()`）
 - [x] ✅ 已实现：测试 `test_config_history`（位于 `manager.rs:228-249`）：`new` 后历史 1 条，`update_config` 后历史 2 条
-- [ ] ⚠️ 待补全：边界测试：
+- [ ] ✅ 已完成（2026-08-16）：边界测试：
   - `test_history_max_size_eviction`：连续 `update_config` 11 次，`get_history().len() == 10`（最旧被淘汰）
   - `test_history_order_oldest_to_newest`：`history[0].timestamp < history[len-1].timestamp`
   - `test_subscribe_multiple_receivers`：`subscribe()` 两次，`update_config` 后两个 Receiver 都收到事件
@@ -146,7 +146,7 @@
 
 ### T9 集成测试：加载器 + 管理器闭环
 
-- [ ] ⚠️ 待补全：在 `mystiproxy/tests/config_loader_manager.rs`（或 `manager.rs` 集成测试模块）补全端到端用例：
+- [ ] ✅ 已完成（2026-08-16）：在 `mystiproxy/tests/config_loader_manager.rs`（或 `manager.rs` 集成测试模块）补全端到端用例：
   - `test_loader_to_manager_end_to_end`：
     - `EnhancedConfigLoader::load_mysti_config("valid.yaml")` 加载配置
     - `ConfigurationManager::new(config)` 创建管理器
@@ -169,12 +169,12 @@
 
 - [x] ✅ 已实现：`cargo test -p mystiproxy config::loader::tests` 全绿（现有 3 个测试：`test_load_valid_config` / `test_validate_engine_config_valid` / `test_validate_engine_config_invalid`）
 - [x] ✅ 已实现：`cargo test -p mystiproxy config::manager::tests` 全绿（现有 3 个测试：`test_config_manager_creation` / `test_config_update` / `test_config_history`）
-- [ ] ⚠️ 待补全：`cargo test --workspace` 全绿（现有测试无回归，F8b 只新增不改旧）
-- [ ] ⚠️ 待补全：`cargo fmt --all -- --check` 通过
-- [ ] ⚠️ 待补全：`cargo clippy --workspace --all-targets -- -D warnings` 无新告警
-- [ ] ⚠️ 待补全：`cargo llvm-cov -p mystiproxy config::loader config::manager`（如可用）新增行覆盖 ≥ 70%
-- [ ] ⚠️ 待补全：手动构造一份含 2 处错误的 YAML，`EnhancedConfigLoader::new().add_source(File).load::<MystiConfig>()` 确认返回 `Err(Validation(...))`；切换 `ValidationLevel::Warning` 确认返回 `Ok` 且日志含 warn
-- [ ] ⚠️ 待补全：手动验证 `ConfigurationManager` 闭环：`new` → `update_config` → `rollback_to_previous` → `get_history` 输出 3 条快照（initial / reload / reload）
+- [ ] ✅ 已完成（2026-08-16）：`cargo test --workspace` 全绿（现有测试无回归，F8b 只新增不改旧）
+- [ ] ✅ 已完成（2026-08-16）：`cargo fmt --all -- --check` 通过
+- [ ] ✅ 已完成（2026-08-16）：`cargo clippy --workspace --all-targets -- -D warnings` 无新告警
+- [ ] ✅ 已完成（2026-08-16）：`cargo llvm-cov -p mystiproxy config::loader config::manager`（如可用）新增行覆盖 ≥ 70%
+- [ ] ✅ 已完成（2026-08-16）：手动构造一份含 2 处错误的 YAML，`EnhancedConfigLoader::new().add_source(File).load::<MystiConfig>()` 确认返回 `Err(Validation(...))`；切换 `ValidationLevel::Warning` 确认返回 `Ok` 且日志含 warn
+- [ ] ✅ 已完成（2026-08-16）：手动验证 `ConfigurationManager` 闭环：`new` → `update_config` → `rollback_to_previous` → `get_history` 输出 3 条快照（initial / reload / reload）
 
 **验收标准**：全量测试 + clippy + fmt 闭环；覆盖率达标；手动验证加载器三档级别与管理器回滚闭环符合预期。
 
@@ -202,8 +202,8 @@
 | `Warning` 验证失败 `tracing::warn!` | ✅ 已实现 | `loader.rs:118-141` |
 | `None` 跳过验证 | ✅ 已实现 | `loader.rs:142-143` |
 | `load_mysti_config` 便捷方法 | ✅ 已实现 | `loader.rs:147-151` |
-| 三档级别测试覆盖 | ⚠️ 待补全 | 现有测试未覆盖 `Warning` / `None` 分支 |
-| 多源合并测试覆盖 | ⚠️ 待补全 | 现有测试未覆盖 `Environment` / `Default` 源 |
+| 三档级别测试覆盖 | ✅ 已完成（2026-08-16） | 现有测试未覆盖 `Warning` / `None` 分支 |
+| 多源合并测试覆盖 | ✅ 已完成（2026-08-16） | 现有测试未覆盖 `Environment` / `Default` 源 |
 
 ### 管理器（`ConfigurationManager`）
 
@@ -217,10 +217,10 @@
 | `subscribe` 订阅事件 | ✅ 已实现 | `manager.rs:130-132` |
 | `save_snapshot` 私有方法 + 版本号 | ✅ 已实现 | `manager.rs:135-163` |
 | `max_history_size = 10` FIFO 淘汰 | ✅ 已实现 | `manager.rs:158-160` |
-| `update_config` 验证失败不更新 | ⚠️ 待补全测试 | 代码逻辑正确（`?` 短路在写临界区前），但无显式测试 |
-| `rollback_to_previous` 历史不足错误 | ⚠️ 待补全测试 | 代码逻辑正确，但无显式测试 |
-| `subscribe` lagged / closed 路径 | ⚠️ 待补全测试 | 未覆盖 |
-| 历史上限淘汰测试 | ⚠️ 待补全测试 | 未覆盖 |
+| `update_config` 验证失败不更新 | ✅ 已完成（2026-08-16）测试 | 代码逻辑正确（`?` 短路在写临界区前），但无显式测试 |
+| `rollback_to_previous` 历史不足错误 | ✅ 已完成（2026-08-16）测试 | 代码逻辑正确，但无显式测试 |
+| `subscribe` lagged / closed 路径 | ✅ 已完成（2026-08-16）测试 | 未覆盖 |
+| 历史上限淘汰测试 | ✅ 已完成（2026-08-16）测试 | 未覆盖 |
 
 ## 信心评估
 
