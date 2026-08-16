@@ -38,4 +38,8 @@ pub struct MystiArg {
     /// 配置验证级别: strict | warn | none
     #[arg(long, default_value = "strict", value_parser = ["strict", "warn", "none"])]
     pub validation_level: String,
+
+    /// 监控配置文件变更并记录（需 --config；引擎热重启属 F8d）
+    #[arg(long)]
+    pub watch: bool,
 }

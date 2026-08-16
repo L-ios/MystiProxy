@@ -92,6 +92,46 @@ async fn main() -> Result<()> {
 
     let config = load_config(&args)?;
 
+    // 热重载：监控配置文件变更（当前记录变更日志；引擎级热重启编排属 F8d）
+    #[cfg(feature = "hot-reload")]
+    if args.watch {
+        let config_path = match &args.config {
+            Some(p) => p.clone(),
+            None => {
+                warn!("--watch 需要同时指定 --config，忽略 watch 开关");
+                String::new()
+            }
+        };
+        if !config_path.is_empty() {
+            let manager = std::sync::Arc::new(
+                match mystiproxy::config::manager::ConfigurationManager::new(config.clone()) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        return Err(mystiproxy::MystiProxyError::Config(format!(
+                            "配置管理器创建失败: {}",
+                            e
+                        ))
+                        .into())
+                    }
+                },
+            );
+            match mystiproxy::config::watcher::start_config_watcher(
+                config_path.clone(),
+                500,
+                manager,
+            )
+            .await
+            {
+                Ok(_handle) => {
+                    info!("配置热重载已启用: 监控 {}", config_path);
+                }
+                Err(e) => {
+                    warn!("配置 watcher 启动失败（继续运行）: {}", e);
+                }
+            }
+        }
+    }
+
     let engines = config.mysti.engine;
     if engines.is_empty() {
         warn!("没有配置任何代理引擎");
