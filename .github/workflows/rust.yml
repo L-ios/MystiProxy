@@ -52,6 +52,9 @@ jobs:
       - name: Run tests (workspace)
         run: cargo test --workspace
 
+      - name: Run tests (mystiproxy all features)
+        run: cargo test -p mystiproxy --features "hot-reload,local-management,legacy-tls"
+
       - name: Run auth integration tests (live PostgreSQL)
         run: cargo test -p mysticentral --test auth_integration
 
