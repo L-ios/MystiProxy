@@ -208,6 +208,7 @@ mod tests {
                     upstream: None,
                     allow: None,
                     deny: None,
+                    management: None,
                 },
             );
         }

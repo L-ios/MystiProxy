@@ -53,7 +53,10 @@ impl LocalManagement {
                 "Sync enabled, creating sync client for instance {}",
                 instance_id
             );
-            Some(std::sync::Arc::new(SyncClient::new(repository.clone(), config.sync.clone())?))
+            Some(std::sync::Arc::new(SyncClient::new(
+                repository.clone(),
+                config.sync.clone(),
+            )?))
         } else {
             None
         };

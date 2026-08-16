@@ -36,6 +36,7 @@ fn http_engine(listen: &str) -> EngineConfig {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
     }
 }
 

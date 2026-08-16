@@ -117,6 +117,7 @@ async fn test_e2e_http_engine_via_upstream_connect_tunnel() {
         upstream: Some("http://127.0.0.1:19251".to_string()),
         allow: None,
         deny: None,
+        management: None,
     };
 
     let handler = mystiproxy::http::create_handler(Arc::new(engine)).expect("handler");

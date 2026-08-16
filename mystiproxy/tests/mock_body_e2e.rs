@@ -164,6 +164,7 @@ async fn test_e2e_mock_static_body_struct_config() {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
     };
 
     let handler = create_handler(Arc::new(engine)).expect("handler");
@@ -223,6 +224,7 @@ async fn test_e2e_mock_body_json_type_without_content() {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
     };
 
     let handler = create_handler(Arc::new(engine)).expect("handler");
