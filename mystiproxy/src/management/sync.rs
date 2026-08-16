@@ -709,6 +709,7 @@ mod tests {
             api_key: None,
             offline_queue_enabled: true,
             max_queue_size: 100,
+            self_endpoint: None,
         };
 
         let client = SyncClient::new(repo, config).expect("Failed to create sync client");

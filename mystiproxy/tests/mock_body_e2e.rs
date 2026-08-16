@@ -50,7 +50,7 @@ async fn get(port: u16, path: &str) -> (u16, String) {
         .await
         .expect("body")
         .to_bytes()
-        .to_stringLossy()
+        .to_string_lossy()
         .to_string();
     (status, body)
 }
@@ -247,13 +247,13 @@ async fn test_e2e_mock_body_json_type_without_content() {
     assert!(body.is_empty(), "json type without content => empty body");
 }
 
-/// hyper Response body collect helper（消除 to_stringLossy 依赖差异）
+/// hyper Response body collect helper（消除 to_string_lossy 依赖差异）
 trait BytesToString {
-    fn to_stringLossy(&self) -> String;
+    fn to_string_lossy(&self) -> String;
 }
 
 impl BytesToString for hyper::body::Bytes {
-    fn to_stringLossy(&self) -> String {
+    fn to_string_lossy(&self) -> String {
         String::from_utf8_lossy(self).to_string()
     }
 }
