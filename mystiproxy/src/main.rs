@@ -144,6 +144,61 @@ async fn main() -> Result<()> {
 
     for (name, engine_config) in engines {
         let name_clone = name.clone();
+
+        // F9: 本地管理模块（feature local-management；FR-068）
+        #[cfg(feature = "local-management")]
+        if let Some(mgmt) = engine_config
+            .management
+            .as_ref()
+            .filter(|m| m.is_effective())
+        {
+            use mystiproxy::management::{LocalManagement, LocalManagementBuilder};
+            let mut builder = LocalManagementBuilder::new().enabled(true).db_path(
+                mgmt.db_path
+                    .clone()
+                    .unwrap_or_else(|| "mystiproxy-mgmt.db".into()),
+            );
+            if let Some(url) = &mgmt.central_url {
+                builder = builder
+                    .self_endpoint(mgmt.listen.clone().unwrap_or_default())
+                    .with_sync(url.clone(), uuid::Uuid::new_v4())
+                    .sync_interval(mgmt.sync_interval.unwrap_or(30) as u32);
+            }
+            match LocalManagement::init(builder.build()).await {
+                Ok(lm) => {
+                    let listen = mgmt.listen.clone().unwrap();
+                    let router = lm.create_router();
+                    lm.start_sync().await.ok();
+                    let mgmt_name = name_clone.clone();
+                    tasks.spawn(async move {
+                        set_engine_name(&mgmt_name);
+                        match crate::parse_tcp_listen(&listen) {
+                            Ok(addr) => {
+                                let listener = match tokio::net::TcpListener::bind(addr).await {
+                                    Ok(l) => l,
+                                    Err(e) => {
+                                        error!("本地管理 API 绑定 {} 失败: {}", listen, e);
+                                        return Ok(());
+                                    }
+                                };
+                                info!("本地管理 API 已启动: {}", listen);
+                                axum::serve(listener, router)
+                                    .await
+                                    .map_err(|e| mystiproxy::MystiProxyError::Io(e))
+                            }
+                            Err(e) => {
+                                error!("本地管理监听地址 '{}' 解析失败: {}", listen, e);
+                                Ok(())
+                            }
+                        }
+                    });
+                }
+                Err(e) => {
+                    error!("引擎 '{}' 本地管理模块初始化失败: {}", name_clone, e);
+                }
+            }
+        }
+
         match engine_config.proxy_type {
             ProxyType::Tcp => match ProxyServer::from_engine_config(&engine_config) {
                 Ok(mut server) => {
@@ -321,6 +376,16 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// 解析 tcp://host:port 形式的监听地址
+fn parse_tcp_listen(addr: &str) -> std::result::Result<SocketAddr, mystiproxy::MystiProxyError> {
+    let stripped = addr.strip_prefix("tcp://").ok_or_else(|| {
+        mystiproxy::MystiProxyError::Config(format!("管理监听地址需 tcp:// 前缀: {addr}"))
+    })?;
+    stripped
+        .parse::<SocketAddr>()
+        .map_err(|e| mystiproxy::MystiProxyError::Config(format!("无效监听地址 '{addr}': {e}")))
+}
+
 fn load_config(args: &MystiArg) -> Result<MystiConfig> {
     if let Some(config_path) = &args.config {
         info!("从配置文件加载: {}", config_path);
@@ -359,6 +424,7 @@ fn load_config(args: &MystiArg) -> Result<MystiConfig> {
             upstream: None,
             allow: None,
             deny: None,
+            management: None,
         };
 
         let mut engine_map = HashMap::new();

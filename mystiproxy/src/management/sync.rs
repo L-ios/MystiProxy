@@ -64,7 +64,7 @@ pub struct SyncClient<R: MockRepository + 'static> {
     /// Offline queue sender
     offline_queue_tx: mpsc::Sender<OfflineQueueEntry>,
     /// Offline queue receiver (for background task)
-    offline_queue_rx: Option<mpsc::Receiver<OfflineQueueEntry>>,
+    offline_queue_rx: std::sync::Arc<tokio::sync::Mutex<Option<mpsc::Receiver<OfflineQueueEntry>>>>,
     /// Last successful sync timestamp
     last_sync: Arc<RwLock<Option<DateTime<Utc>>>>,
 }
@@ -90,7 +90,7 @@ impl<R: MockRepository + 'static> SyncClient<R> {
             instance_id,
             status: Arc::new(RwLock::new(SyncStatus::Disconnected)),
             offline_queue_tx,
-            offline_queue_rx: Some(offline_queue_rx),
+            offline_queue_rx: std::sync::Arc::new(tokio::sync::Mutex::new(Some(offline_queue_rx))),
             last_sync: Arc::new(RwLock::new(None)),
         })
     }
@@ -111,7 +111,7 @@ impl<R: MockRepository + 'static> SyncClient<R> {
     }
 
     /// Start the sync client background task
-    pub async fn start(mut self) -> Result<()> {
+    pub async fn start(&self) -> Result<()> {
         if !self.config.enabled {
             info!("Sync is disabled, not starting sync client");
             return Ok(());
@@ -163,7 +163,7 @@ impl<R: MockRepository + 'static> SyncClient<R> {
 
         // Process offline queue
         if self.config.offline_queue_enabled {
-            if let Some(mut rx) = self.offline_queue_rx.take() {
+            if let Some(mut rx) = self.offline_queue_rx.lock().await.take() {
                 let client = self.client.clone();
                 let central_url_clone = central_url.clone();
                 let api_key = self.config.api_key.clone();
@@ -192,7 +192,7 @@ impl<R: MockRepository + 'static> SyncClient<R> {
 
     /// Register this instance with central management
     async fn register_with_central(&self, central_url: &str) -> Result<()> {
-        let url = format!("{}/api/v1/instances/register", central_url);
+        let url = format!("{}/api/v1/instances", central_url);
 
         let mut status = self.status.write().await;
         *status = SyncStatus::Syncing;
@@ -203,6 +203,13 @@ impl<R: MockRepository + 'static> SyncClient<R> {
             .header("X-Instance-ID", self.instance_id.to_string())
             .header("X-API-Key", self.config.api_key.as_deref().unwrap_or(""))
             .json(&serde_json::json!({
+                "name": format!("mystiproxy-{}", &self.instance_id.to_string()[..8]),
+                "endpoint_url": self
+                    .config
+                    .self_endpoint
+                    .clone()
+                    .map(|e| e.replacen("tcp://", "http://", 1))
+                    .unwrap_or_else(|| central_url.to_string()),
                 "instance_id": self.instance_id,
                 "timestamp": Utc::now(),
             }))
@@ -263,29 +270,34 @@ impl<R: MockRepository + 'static> SyncClient<R> {
             )));
         }
 
-        let sync_response: SyncMessage = response.json().await?;
-
-        match sync_response {
-            SyncMessage::SyncResponse { configs, deleted } => {
-                // Apply received configurations
-                for config in configs {
-                    self.repository.save(&config).await?;
-                }
-
-                // Delete removed configurations
-                for id in deleted {
-                    self.repository.delete(id).await?;
-                }
-
-                // Update last sync timestamp
-                let mut last_sync = self.last_sync.write().await;
-                *last_sync = Some(Utc::now());
-
-                info!("Pull completed successfully");
-                Ok(vec![])
-            }
-            _ => Err(ManagementError::sync("Unexpected response from central")),
+        // 中心返回 {configs, deleted_ids, server_time}（非 tagged SyncMessage）
+        #[derive(serde::Deserialize)]
+        struct PullBody {
+            #[serde(default)]
+            configs: Vec<crate::management::models::MockConfiguration>,
+            #[serde(default)]
+            deleted_ids: Vec<Uuid>,
         }
+        let pull: PullBody = response.json().await?;
+
+        {
+            // Apply received configurations
+            for config in pull.configs {
+                self.repository.save(&config).await?;
+            }
+
+            // Delete removed configurations
+            for id in pull.deleted_ids {
+                self.repository.delete(id).await?;
+            }
+
+            // Update last sync timestamp
+            let mut last_sync = self.last_sync.write().await;
+            *last_sync = Some(Utc::now());
+        }
+
+        info!("Pull completed successfully");
+        Ok(vec![])
     }
 
     /// Push a configuration change to central management
@@ -425,16 +437,23 @@ async fn perform_periodic_sync<R: MockRepository>(
         )));
     }
 
-    let sync_response: SyncMessage = response.json().await?;
-
-    if let SyncMessage::SyncResponse { configs, deleted } = sync_response {
+    // 中心返回 {configs, deleted_ids, server_time}（非 tagged SyncMessage）
+    #[derive(serde::Deserialize)]
+    struct PullBody {
+        #[serde(default)]
+        configs: Vec<crate::management::models::MockConfiguration>,
+        #[serde(default)]
+        deleted_ids: Vec<Uuid>,
+    }
+    let pull: PullBody = response.json().await?;
+    {
         // Apply received configurations
-        for config in configs {
+        for config in pull.configs {
             repository.save(&config).await?;
         }
 
         // Delete removed configurations
-        for id in deleted {
+        for id in pull.deleted_ids {
             repository.delete(id).await?;
         }
 

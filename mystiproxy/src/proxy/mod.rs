@@ -300,6 +300,7 @@ mod tests {
             upstream: None,
             allow: None,
             deny: None,
+            management: None,
         };
 
         let proxy_config = ProxyConfig::from_engine_config(&engine_config).unwrap();

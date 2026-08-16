@@ -65,6 +65,10 @@ pub struct SyncConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
 
+    /// 本实例管理 API 对外可达地址（注册时上报，供中心下发）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub self_endpoint: Option<String>,
+
     /// Enable offline queue
     #[serde(default = "default_offline_queue")]
     pub offline_queue_enabled: bool,
@@ -90,6 +94,7 @@ impl Default for SyncConfig {
             instance_id: None,
             sync_interval_secs: 0,
             api_key: None,
+            self_endpoint: None,
             offline_queue_enabled: default_offline_queue(),
             max_queue_size: default_max_queue_size(),
         }

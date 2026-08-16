@@ -112,6 +112,7 @@ async fn start_test_server(locations: Vec<LocationConfig>) -> String {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 

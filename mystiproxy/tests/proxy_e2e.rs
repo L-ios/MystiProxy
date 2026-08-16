@@ -134,6 +134,7 @@ async fn start_proxy(upstream_port: u16, locations: Vec<LocationConfig>) -> Stri
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 
@@ -465,6 +466,7 @@ async fn test_e2e_proxy_adds_engine_level_headers() {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 

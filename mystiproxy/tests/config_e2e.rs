@@ -258,6 +258,7 @@ fn test_e2e_config_serialization_round_trip() {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 
@@ -405,6 +406,7 @@ fn test_e2e_build_config_from_structs() {
                         upstream: None,
                         allow: None,
                         deny: None,
+                        management: None,
                     },
                 );
                 m
@@ -479,5 +481,72 @@ cert: []
         let r =
             MystiConfig::load_validated_with_level(dir.to_str().unwrap(), ValidationLevel::Strict);
         assert!(r.is_ok(), "good config must pass: {:?}", r.err());
+    }
+}
+
+#[cfg(test)]
+mod f9_management_config {
+    use mystiproxy::config::{ManagementConfig, MystiConfig};
+
+    #[test]
+    fn test_management_default_not_effective() {
+        let m = ManagementConfig::default();
+        assert!(!m.is_effective(), "no listen -> disabled");
+    }
+
+    #[test]
+    fn test_management_listen_effective() {
+        let m = ManagementConfig {
+            listen: Some("tcp://127.0.0.1:8081".into()),
+            ..Default::default()
+        };
+        assert!(m.is_effective());
+    }
+
+    #[test]
+    fn test_management_explicit_disable() {
+        let m = ManagementConfig {
+            listen: Some("tcp://127.0.0.1:8081".into()),
+            enabled: Some(false),
+            ..Default::default()
+        };
+        assert!(!m.is_effective());
+    }
+
+    #[test]
+    fn test_yaml_management_section_parsed() {
+        let yaml = r#"
+mysti:
+  engine:
+    web:
+      listen: tcp://127.0.0.1:18080
+      target: tcp://127.0.0.1:18081
+      proxy_type: http
+      management:
+        listen: tcp://127.0.0.1:18091
+        db_path: /tmp/f9-mgmt.db
+        central_url: http://127.0.0.1:18090
+        sync_interval: 15
+cert: []
+"#;
+        let c = MystiConfig::from_yaml(yaml).unwrap();
+        let m = c.mysti.engine["web"].management.as_ref().unwrap();
+        assert_eq!(m.listen.as_deref(), Some("tcp://127.0.0.1:18091"));
+        assert_eq!(m.db_path.as_deref(), Some("/tmp/f9-mgmt.db"));
+        assert_eq!(m.central_url.as_deref(), Some("http://127.0.0.1:18090"));
+        assert_eq!(m.sync_interval, Some(15));
+        assert!(m.is_effective());
+    }
+
+    #[test]
+    fn test_yaml_without_management_is_none() {
+        let yaml = r#"
+mysti:
+  engine:
+    web: {listen: tcp://127.0.0.1:18080, target: tcp://127.0.0.1:18081, proxy_type: http}
+cert: []
+"#;
+        let c = MystiConfig::from_yaml(yaml).unwrap();
+        assert!(c.mysti.engine["web"].management.is_none());
     }
 }

@@ -67,6 +67,7 @@ async fn start_proxy_with_auth(auth_config: AuthConfig) -> (String, u16) {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 
@@ -262,6 +263,7 @@ async fn test_e2e_auth_no_config_allows_all() {
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 

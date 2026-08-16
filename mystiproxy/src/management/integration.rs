@@ -18,7 +18,7 @@ pub struct LocalManagement {
     /// Repository
     repository: Arc<LocalMockRepository>,
     /// Sync client (if enabled)
-    sync_client: Option<SyncClient<LocalMockRepository>>,
+    sync_client: Option<std::sync::Arc<SyncClient<LocalMockRepository>>>,
 }
 
 impl LocalManagement {
@@ -53,7 +53,7 @@ impl LocalManagement {
                 "Sync enabled, creating sync client for instance {}",
                 instance_id
             );
-            Some(SyncClient::new(repository.clone(), config.sync.clone())?)
+            Some(std::sync::Arc::new(SyncClient::new(repository.clone(), config.sync.clone())?))
         } else {
             None
         };
@@ -86,16 +86,14 @@ impl LocalManagement {
 
     /// Start the sync client (if enabled)
     pub async fn start_sync(&self) -> super::Result<()> {
-        if let Some(ref _sync_client) = self.sync_client {
+        if let Some(ref sync_client) = self.sync_client {
             info!("Starting sync client");
-            // Note: In a real implementation, we would spawn a task here
-            // For now, we just log that sync would start
-            // let client = sync_client.clone();
-            // tokio::spawn(async move {
-            //     if let Err(e) = client.start().await {
-            //         error!("Sync client failed: {}", e);
-            //     }
-            // });
+            let client = sync_client.clone();
+            tokio::spawn(async move {
+                if let Err(e) = client.start().await {
+                    tracing::error!("Sync client failed: {}", e);
+                }
+            });
         }
         Ok(())
     }
@@ -143,6 +141,12 @@ impl LocalManagementBuilder {
     }
 
     /// Enable sync with central URL
+    /// 设置本实例对外可达地址（注册上报）
+    pub fn self_endpoint(mut self, endpoint: impl Into<String>) -> Self {
+        self.config.sync.self_endpoint = Some(endpoint.into());
+        self
+    }
+
     pub fn with_sync(mut self, central_url: impl Into<String>, instance_id: uuid::Uuid) -> Self {
         self.config.sync.enabled = true;
         self.config.sync.central_url = Some(central_url.into());

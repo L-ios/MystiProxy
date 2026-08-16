@@ -349,6 +349,7 @@ mod tests {
             upstream: None,
             allow: None,
             deny: None,
+            management: None,
         };
         assert!(validate_engine_config(&engine).is_ok());
     }
@@ -368,6 +369,7 @@ mod tests {
             upstream: None,
             allow: None,
             deny: None,
+            management: None,
         };
         assert!(validate_engine_config(&engine).is_ok());
 

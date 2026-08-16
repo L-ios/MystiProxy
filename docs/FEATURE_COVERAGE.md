@@ -32,6 +32,7 @@
 | WebSocket 升级握手 | ✅ | features_e2e |
 | Forward 代理（CONNECT 隧道） | ✅ | shell 实测（curl -x） |
 | 本地管理（local-management feature，SQLite） | ✅ | 181 单测 |
+| 本地管理二进制入口（engine.management 配置段） | ✅ | F9 真实全链路：健康检查/SQLite 持久化/中心注册/周期 pull/push-all 下发 |
 
 ## 三、本次盘点修复的问题
 
@@ -48,7 +49,8 @@
 
 ## 五、已知设计现状（非缺陷）
 
-1. Forward 代理仅支持 CONNECT 隧道，普通 HTTP 代理请求返回 400（明确的设计语义）
+1. （已解决）Forward 普通 HTTP 代理：上游 3d723c6 已实现绝对 URI 转发
+2. （已解决）本地管理无启用入口：F9 新增 engine.management 配置段 + main.rs 接线
 2. NTLM 认证仅在 upstream 模块内部可用，配置面未暴露独立开关
 3. UDP 未实现（地址解析层即拒绝，文档已声明）
 4. `http://` target 不被 `SocketStream` 接受，需写 `tcp://`（见 config.example.yaml）

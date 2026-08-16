@@ -75,6 +75,7 @@ async fn start_proxy(upstream_port: u16, locations: Vec<LocationConfig>) -> Stri
         upstream: None,
         allow: None,
         deny: None,
+        management: None,
         tls: None,
     };
 

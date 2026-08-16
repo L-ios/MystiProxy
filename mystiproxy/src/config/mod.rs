@@ -25,7 +25,7 @@ pub use watcher::start_config_watcher;
 pub struct MystiConfig {
     /// Mysti 引擎配置
     pub mysti: Mysti,
-    /// 证书配置
+
     #[serde(default)]
     pub cert: Vec<CertConfig>,
 }
@@ -82,6 +82,9 @@ pub struct EngineConfig {
     /// 入站 CIDR 黑名单（优先于 allow）
     #[serde(default)]
     pub deny: Option<Vec<String>>,
+    /// 本地管理模块（feature local-management）
+    #[serde(default)]
+    pub management: Option<ManagementConfig>,
 }
 
 /// TLS 配置
@@ -122,6 +125,33 @@ fn default_auth_header() -> String {
 
 fn default_auth_enabled() -> bool {
     true
+}
+
+/// 本地管理模块配置（FR-068：本地 REST API 与中心同契约）
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct ManagementConfig {
+    /// 本地管理 API 监听地址（如 tcp://127.0.0.1:8081）；缺省视为未启用
+    #[serde(default)]
+    pub listen: Option<String>,
+    /// SQLite 数据库路径（默认 mystiproxy-mgmt.db）
+    #[serde(default)]
+    pub db_path: Option<String>,
+    /// 中心管理端地址（如 http://central:8090）；设置后启用同步
+    #[serde(default)]
+    pub central_url: Option<String>,
+    /// 同步间隔（秒，默认 30）
+    #[serde(default)]
+    pub sync_interval: Option<u64>,
+    /// 显式关闭开关
+    #[serde(default)]
+    pub enabled: Option<bool>,
+}
+
+impl ManagementConfig {
+    /// 是否实际启用：未显式禁用且提供了监听地址
+    pub fn is_effective(&self) -> bool {
+        self.enabled.unwrap_or(true) && self.listen.is_some()
+    }
 }
 
 /// 证书配置
