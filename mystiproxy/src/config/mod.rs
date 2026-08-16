@@ -410,9 +410,16 @@ impl MystiConfig {
         Ok(config)
     }
 
-    /// 加载并验证配置（使用增强加载器）
+    /// 加载并验证配置（使用增强加载器，Strict）
     pub fn load_validated(path: &str) -> crate::Result<Self> {
-        let loader = EnhancedConfigLoader::new().add_source(ConfigSource::File(path.to_string()));
+        Self::load_validated_with_level(path, ValidationLevel::Strict)
+    }
+
+    /// 加载并验证配置（指定验证级别）
+    pub fn load_validated_with_level(path: &str, level: ValidationLevel) -> crate::Result<Self> {
+        let loader = EnhancedConfigLoader::new()
+            .with_validation_level(level)
+            .add_source(ConfigSource::File(path.to_string()));
         loader
             .load::<Self>()
             .map_err(|e: ConfigValidationError| crate::MystiProxyError::Config(e.to_string()))

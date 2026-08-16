@@ -422,3 +422,62 @@ fn test_e2e_build_config_from_structs() {
     assert!(loc.request.is_some());
     assert!(engine.auth.is_some());
 }
+
+#[cfg(test)]
+mod f8b_validation_wiring {
+    use mystiproxy::config::{MystiConfig, ValidationLevel};
+
+    fn bad_cidr_yaml() -> String {
+        r#"
+mysti:
+  engine:
+    web:
+      listen: tcp://127.0.0.1:18099
+      target: tcp://127.0.0.1:18081
+      proxy_type: http
+      allow: ["10.0.0.0/99"]
+cert: []
+"#
+        .to_string()
+    }
+
+    fn good_yaml() -> String {
+        r#"
+mysti:
+  engine:
+    web:
+      listen: tcp://127.0.0.1:18099
+      target: tcp://127.0.0.1:18081
+      proxy_type: http
+cert: []
+"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_strict_rejects_bad_cidr_yaml() {
+        let dir = std::env::temp_dir().join("f8b_test_strict.yaml");
+        std::fs::write(&dir, bad_cidr_yaml()).unwrap();
+        let r =
+            MystiConfig::load_validated_with_level(dir.to_str().unwrap(), ValidationLevel::Strict);
+        assert!(r.is_err(), "strict must reject /99 CIDR");
+    }
+
+    #[test]
+    fn test_none_level_allows_bad_cidr_yaml() {
+        let dir = std::env::temp_dir().join("f8b_test_none.yaml");
+        std::fs::write(&dir, bad_cidr_yaml()).unwrap();
+        let r =
+            MystiConfig::load_validated_with_level(dir.to_str().unwrap(), ValidationLevel::None);
+        assert!(r.is_ok(), "none must allow: {:?}", r.err());
+    }
+
+    #[test]
+    fn test_good_yaml_passes_strict() {
+        let dir = std::env::temp_dir().join("f8b_test_good.yaml");
+        std::fs::write(&dir, good_yaml()).unwrap();
+        let r =
+            MystiConfig::load_validated_with_level(dir.to_str().unwrap(), ValidationLevel::Strict);
+        assert!(r.is_ok(), "good config must pass: {:?}", r.err());
+    }
+}

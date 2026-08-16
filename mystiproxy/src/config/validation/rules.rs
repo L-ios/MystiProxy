@@ -62,6 +62,19 @@ pub fn validate_engine_config(config: &EngineConfig) -> Result<(), ValidationErr
         }
     }
 
+    // 验证入站 IP 过滤 CIDR（F5 字段）
+    for (field, list) in [("allow", &config.allow), ("deny", &config.deny)] {
+        if let Some(rules) = list {
+            for rule in rules {
+                if let Err(e) = validate_cidr(rule) {
+                    let mut e = e;
+                    e.message = Some(format!("{field}: '{}' {e:?}", rule).into());
+                    errors.add(field, e);
+                }
+            }
+        }
+    }
+
     if errors.is_empty() {
         Ok(())
     } else {

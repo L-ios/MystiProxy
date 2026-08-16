@@ -284,7 +284,23 @@ async fn main() -> Result<()> {
 fn load_config(args: &MystiArg) -> Result<MystiConfig> {
     if let Some(config_path) = &args.config {
         info!("从配置文件加载: {}", config_path);
-        return MystiConfig::from_yaml_file(config_path);
+
+        // F8b: 走验证加载路径；strict（默认）下语义错误拒绝启动
+        let level = match args.validation_level.as_str() {
+            "none" => mystiproxy::config::ValidationLevel::None,
+            "warn" => mystiproxy::config::ValidationLevel::Warning,
+            _ => mystiproxy::config::ValidationLevel::Strict,
+        };
+        match MystiConfig::load_validated_with_level(config_path, level) {
+            Ok(c) => return Ok(c),
+            Err(e) => {
+                let ui = mystiproxy::config::user_interface::ConfigUserInterface::new(true, false);
+                eprintln!("配置验证失败（--validation-level 可调整级别）:");
+                eprintln!("{e}");
+                let _ = ui;
+                return Err(e);
+            }
+        }
     }
 
     if let (Some(target), Some(listen)) = (&args.target, &args.listen) {

@@ -34,4 +34,8 @@ pub struct MystiArg {
     /// 例如: 10s, 5m, 1h
     #[arg(long)]
     pub timeout: Option<String>,
+
+    /// 配置验证级别: strict | warn | none
+    #[arg(long, default_value = "strict", value_parser = ["strict", "warn", "none"])]
+    pub validation_level: String,
 }
