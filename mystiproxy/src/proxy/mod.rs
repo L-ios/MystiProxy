@@ -2,7 +2,7 @@
 //!
 //! 提供 TCP 代理服务器的核心功能，包括地址解析、监听和数据转发
 
-mod address;
+pub(crate) mod address;
 mod forward;
 mod tcp;
 

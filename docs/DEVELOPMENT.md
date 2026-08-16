@@ -220,3 +220,7 @@ cargo bench
 ## Footnotes
 
 <a name="footnote-1">[1]</a>: Unix 中也可以传输 HTTPS 协议的内容，HTTPS 主要是 TCP Socket 上将其通过 TLS 进行加密
+
+### WebSocket 真代理（F8）[已完成]
+
+- [x] 升级请求转发到 engine.target 并双向字节桥接（上游不可达回 502）

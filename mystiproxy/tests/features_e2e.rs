@@ -140,21 +140,14 @@ Sec-WebSocket-Version: 13\r\n\
 
     let response = send_raw_http_short(&addr, request).await;
 
-    // Should get 101 Switching Protocols
+    // F8 真代理语义：target(127.0.0.1:1) 不可达 -> 502（旧假握手曾返回 101）
     assert_eq!(
         extract_status(&response),
-        101,
-        "WebSocket upgrade should return 101, got: {}",
+        502,
+        "unreachable upstream must yield 502, got: {}",
         &response[..response.len().min(200)]
     );
-    assert!(
-        response.to_lowercase().contains("upgrade"),
-        "response should contain Upgrade header"
-    );
-    assert!(
-        response.to_lowercase().contains("sec-websocket-accept"),
-        "response should contain Sec-WebSocket-Accept header"
-    );
+    // 502 关闭语义：不再携带 Upgrade / Sec-WebSocket-Accept 头（升级未发生）
 }
 
 #[tokio::test]

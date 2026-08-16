@@ -33,7 +33,7 @@ pub use static_files::{StaticFileConfig, StaticFileService};
 pub use upstream::{
     ProxyConverter, UpstreamAuth, UpstreamProtocol, UpstreamProxyConfig, UpstreamProxyConnector,
 };
-pub use websocket::{handle_websocket_upgrade, is_websocket_upgrade_request};
+pub use websocket::{is_websocket_upgrade_request, proxy_websocket};
 
 /// HTTP 请求处理工具
 pub struct HttpHandler;

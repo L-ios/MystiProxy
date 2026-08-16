@@ -187,7 +187,7 @@ where
 
     /// 处理连接服务
     async fn serve_connection(
-        io: impl hyper::rt::Read + hyper::rt::Write + Unpin,
+        io: impl hyper::rt::Read + hyper::rt::Write + Unpin + Send + 'static,
         service: S,
         timeout: Option<Duration>,
     ) -> Result<()> {
@@ -195,7 +195,8 @@ where
         let conn = http1::Builder::new()
             .preserve_header_case(true)
             .title_case_headers(true)
-            .serve_connection(io, service);
+            .serve_connection(io, service)
+            .with_upgrades();
 
         // 应用超时
         if let Some(duration) = timeout {
