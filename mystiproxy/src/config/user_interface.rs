@@ -232,17 +232,293 @@ impl ConfigUserInterface {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{EngineConfig, Mysti, MystiConfig, ProxyType};
+    use std::collections::HashMap;
+
+    fn make_config(engines: usize) -> MystiConfig {
+        let mut map = HashMap::new();
+        for i in 0..engines {
+            map.insert(
+                format!("e{i}"),
+                EngineConfig {
+                    listen: format!("tcp://0.0.0.0:{} ", 8000 + i).trim().to_string(),
+                    target: format!("tcp://127.0.0.1:{} ", 9000 + i).trim().to_string(),
+                    proxy_type: ProxyType::Http,
+                    request_timeout: None,
+                    connection_timeout: None,
+                    header: None,
+                    locations: None,
+                    tls: None,
+                    auth: None,
+                    upstream: None,
+                    allow: None,
+                    deny: None,
+                    management: None,
+                },
+            );
+        }
+        MystiConfig {
+            mysti: Mysti { engine: map },
+            cert: vec![],
+        }
+    }
+
+    // ---------- T1 构造 ----------
 
     #[test]
-    fn test_ui_creation() {
+    fn test_ui_creation_verbose_no_color() {
         let ui = ConfigUserInterface::new(true, false);
         assert!(ui.verbose);
         assert!(!ui.color_output);
     }
 
     #[test]
-    fn test_extract_suggestions() {
-        let _ui = ConfigUserInterface::default();
-        // 测试需要实际的 ValidationErrors，这里仅验证编译通过
+    fn test_ui_creation_silent_with_color() {
+        let ui = ConfigUserInterface::new(false, true);
+        assert!(!ui.verbose);
+        assert!(ui.color_output);
+    }
+
+    #[test]
+    fn test_ui_default_is_silent_with_color() {
+        let ui = ConfigUserInterface::default();
+        assert!(!ui.verbose);
+        assert!(ui.color_output);
+    }
+
+    // ---------- T2 print_validation_result ----------
+
+    #[test]
+    fn test_print_validation_result_ok_silent() {
+        // verbose=false 时成功路径不打印
+        let ui = ConfigUserInterface::new(false, false);
+        // 仅验证不 panic（stdout 不可断言）
+        ui.print_validation_result(&Ok(()));
+    }
+
+    #[test]
+    fn test_print_validation_result_ok_verbose() {
+        let ui = ConfigUserInterface::new(true, false);
+        ui.print_validation_result(&Ok(()));
+    }
+
+    #[test]
+    fn test_print_validation_result_load_error() {
+        let ui = ConfigUserInterface::new(false, false);
+        let err = ConfigValidationError::Load("file not found".to_string());
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_print_validation_result_parse_error() {
+        let ui = ConfigUserInterface::new(true, false);
+        let err = ConfigValidationError::Parse("invalid yaml".to_string());
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_print_validation_result_security_error() {
+        let ui = ConfigUserInterface::new(false, false);
+        let err = ConfigValidationError::Security("ssrf blocked".to_string());
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_print_validation_result_hot_reload_error() {
+        let ui = ConfigUserInterface::new(false, false);
+        let err = ConfigValidationError::HotReload("watcher died".to_string());
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_print_validation_result_watch_error() {
+        let ui = ConfigUserInterface::new(false, false);
+        let err = ConfigValidationError::Watch("notify error".to_string());
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_print_validation_result_validation_error_with_field_errors() {
+        let ui = ConfigUserInterface::new(true, false);
+        // 构造一个含字段错误的 ValidationErrors
+        let mut errs = validator::ValidationErrors::new();
+        errs.add("listen", validator::ValidationError::new("listen_empty"));
+        errs.add(
+            "target",
+            validator::ValidationError {
+                code: "invalid_tcp_target".into(),
+                message: Some("bad target".into()),
+                params: HashMap::new(),
+            },
+        );
+        let err = ConfigValidationError::Validation(errs);
+        ui.print_validation_result(&Err(err));
+    }
+
+    // ---------- T3 print_config_summary ----------
+
+    #[test]
+    fn test_print_config_summary_empty_engines() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cfg = make_config(0);
+        // 仅验证不 panic
+        ui.print_config_summary(&cfg);
+    }
+
+    #[test]
+    fn test_print_config_summary_with_engines() {
+        let ui = ConfigUserInterface::new(true, true);
+        let cfg = make_config(3);
+        ui.print_config_summary(&cfg);
+    }
+
+    #[test]
+    fn test_print_config_summary_with_certs() {
+        let ui = ConfigUserInterface::new(false, false);
+        let mut cfg = make_config(1);
+        cfg.cert = vec![crate::config::CertConfig {
+            name: "root".to_string(),
+            root_key: "k".to_string(),
+        }];
+        ui.print_config_summary(&cfg);
+    }
+
+    // ---------- T4 extract_validation_suggestions 映射 ----------
+
+    #[test]
+    fn test_extract_suggestions_listen_codes() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cases: &[(&str, &str)] = &[
+            ("listen", "listen_empty"),
+            ("listen", "invalid_tcp_address"),
+            ("listen", "empty_unix_socket_path"),
+            ("listen", "unsupported_protocol"),
+        ];
+        for (field, code) in cases {
+            let mut errs = validator::ValidationErrors::new();
+            errs.add(field, validator::ValidationError::new(code));
+            let err = ConfigValidationError::Validation(errs);
+            // 走 print 路径间接触发 extract_validation_suggestions
+            ui.print_validation_result(&Err(err));
+        }
+    }
+
+    #[test]
+    fn test_extract_suggestions_target_codes() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cases: &[(&str, &str)] = &[
+            ("target", "target_empty"),
+            ("target", "invalid_tcp_target"),
+            ("target", "empty_unix_target_path"),
+            ("target", "unsupported_target_protocol"),
+        ];
+        for (field, code) in cases {
+            let mut errs = validator::ValidationErrors::new();
+            errs.add(field, validator::ValidationError::new(code));
+            let err = ConfigValidationError::Validation(errs);
+            ui.print_validation_result(&Err(err));
+        }
+    }
+
+    #[test]
+    fn test_extract_suggestions_proxy_type_codes() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cases: &[&str] = &[
+            "tcp_proxy_requires_tcp_addresses",
+            "http_proxy_requires_tcp_or_unix_listen",
+            "http_proxy_requires_tcp_or_unix_target",
+            "forward_proxy_requires_tcp_listen",
+        ];
+        for code in cases {
+            let mut errs = validator::ValidationErrors::new();
+            errs.add("proxy_type", validator::ValidationError::new(code));
+            let err = ConfigValidationError::Validation(errs);
+            ui.print_validation_result(&Err(err));
+        }
+    }
+
+    #[test]
+    fn test_extract_suggestions_tls_codes() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cases: &[&str] = &[
+            "tls_cert_path_empty",
+            "tls_key_path_empty",
+            "tls_cert_file_not_found",
+            "tls_key_file_not_found",
+            "tls_client_ca_file_not_found",
+        ];
+        for code in cases {
+            let mut errs = validator::ValidationErrors::new();
+            errs.add("tls", validator::ValidationError::new(code));
+            let err = ConfigValidationError::Validation(errs);
+            ui.print_validation_result(&Err(err));
+        }
+    }
+
+    #[test]
+    fn test_extract_suggestions_auth_codes() {
+        let ui = ConfigUserInterface::new(false, false);
+        let cases: &[&str] = &[
+            "header_auth_requires_expected_value",
+            "jwt_auth_requires_secret",
+            "unsupported_auth_type",
+        ];
+        for code in cases {
+            let mut errs = validator::ValidationErrors::new();
+            errs.add("auth", validator::ValidationError::new(code));
+            let err = ConfigValidationError::Validation(errs);
+            ui.print_validation_result(&Err(err));
+        }
+    }
+
+    #[test]
+    fn test_extract_suggestions_upstream_code() {
+        let ui = ConfigUserInterface::new(false, false);
+        let mut errs = validator::ValidationErrors::new();
+        errs.add(
+            "upstream",
+            validator::ValidationError::new("invalid_upstream_proxy_url"),
+        );
+        let err = ConfigValidationError::Validation(errs);
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_extract_suggestions_locations_fallback() {
+        let ui = ConfigUserInterface::new(false, false);
+        let mut errs = validator::ValidationErrors::new();
+        errs.add(
+            "locations",
+            validator::ValidationError::new("any_unknown_code"),
+        );
+        let err = ConfigValidationError::Validation(errs);
+        ui.print_validation_result(&Err(err));
+    }
+
+    #[test]
+    fn test_extract_suggestions_unknown_field_fallback() {
+        let ui = ConfigUserInterface::new(false, false);
+        let mut errs = validator::ValidationErrors::new();
+        errs.add(
+            "unknown_field",
+            validator::ValidationError {
+                code: "unknown_code".into(),
+                message: Some("custom message".into()),
+                params: HashMap::new(),
+            },
+        );
+        let err = ConfigValidationError::Validation(errs);
+        ui.print_validation_result(&Err(err));
+    }
+
+    // ---------- T5 着色输出 ----------
+
+    #[test]
+    fn test_color_output_path_no_panic() {
+        let ui = ConfigUserInterface::new(true, true);
+        let err = ConfigValidationError::Security("test".to_string());
+        ui.print_validation_result(&Err(err));
+        let cfg = make_config(2);
+        ui.print_config_summary(&cfg);
     }
 }

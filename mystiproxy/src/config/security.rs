@@ -102,21 +102,20 @@ impl SecurityValidator {
         let parsed = url::Url::parse(url)
             .map_err(|e| ConfigValidationError::Security(format!("invalid URL: {}", e)))?;
 
-        // 检查内部网络访问
-        if let Some(host) = parsed.host_str() {
-            use std::str::FromStr;
-            let ip_addr: std::net::IpAddr = match std::net::IpAddr::from_str(host) {
-                Ok(ip) => ip,
-                Err(_) => {
-                    // 不是 IP 地址，跳过内网检查
-                    return Ok(());
-                }
+        // 检查内部网络访问：使用 Host 枚举以正确处理 IPv6（host_str 带 [] 无法直接解析）
+        if let Some(host) = parsed.host() {
+            let ip_addr: Option<std::net::IpAddr> = match host {
+                url::Host::Ipv4(v4) => Some(std::net::IpAddr::V4(v4)),
+                url::Host::Ipv6(v6) => Some(std::net::IpAddr::V6(v6)),
+                url::Host::Domain(_) => None, // 域名：跳过内网检查
             };
-            for network in &self.internal_networks {
-                if network.contains(ip_addr) {
-                    return Err(ConfigValidationError::Security(
-                        "access to internal network addresses is blocked".to_string(),
-                    ));
+            if let Some(ip) = ip_addr {
+                for network in &self.internal_networks {
+                    if network.contains(ip) {
+                        return Err(ConfigValidationError::Security(
+                            "access to internal network addresses is blocked".to_string(),
+                        ));
+                    }
                 }
             }
         }
@@ -151,7 +150,7 @@ impl SecurityValidator {
     /// 检查配置中的敏感信息
     pub fn check_sensitive_config(&self, config: &str) -> ValidationResult<()> {
         // 检查是否包含类似密钥的模式
-        let sensitive_patterns = [
+        const SENSITIVE_PATTERNS: &[&str] = &[
             r"(?i)password\s*[:=]\s*\S+",
             r"(?i)secret\s*[:=]\s*\S+",
             r"(?i)api[_-]?key\s*[:=]\s*\S+",
@@ -159,12 +158,23 @@ impl SecurityValidator {
             r"(?i)private[_-]?key\s*[:=]\s*\S+",
         ];
 
-        for pattern in &sensitive_patterns {
-            let regex = Regex::new(pattern).unwrap();
+        // 预编译正则，编译失败即视为配置校验错误而非 panic
+        let compiled: Vec<Regex> = SENSITIVE_PATTERNS
+            .iter()
+            .map(|p| Regex::new(p))
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                ConfigValidationError::Security(format!(
+                    "failed to compile sensitive pattern: {}",
+                    e
+                ))
+            })?;
+
+        for (i, regex) in compiled.iter().enumerate() {
             if regex.is_match(config) {
                 warn!(
                     "Configuration may contain sensitive information matching pattern: {}",
-                    pattern
+                    SENSITIVE_PATTERNS[i]
                 );
             }
         }
@@ -177,6 +187,35 @@ impl SecurityValidator {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    // ---------- T1 SecurityValidator 构造 ----------
+
+    #[test]
+    fn test_new_creates_validator_with_defaults() {
+        let v = SecurityValidator::new();
+        assert!(!v.dangerous_headers.is_empty());
+        assert!(!v.internal_networks.is_empty());
+        assert!(!v.url_blacklist_patterns.is_empty());
+    }
+
+    #[test]
+    fn test_default_matches_new() {
+        let new = SecurityValidator::new();
+        let def: SecurityValidator = Default::default();
+        assert_eq!(new.dangerous_headers.len(), def.dangerous_headers.len());
+        assert_eq!(new.internal_networks.len(), def.internal_networks.len());
+    }
+
+    #[test]
+    fn test_all_dangerous_headers_are_lowercase_normalized() {
+        // 构造器里把 DANGEROUS_HEADERS 全部 lowercase 化
+        let v = SecurityValidator::new();
+        for h in &v.dangerous_headers {
+            assert_eq!(h.to_lowercase(), h.clone());
+        }
+    }
+
+    // ---------- T2 危险头部校验 ----------
 
     #[test]
     fn test_validate_headers() {
@@ -191,6 +230,50 @@ mod tests {
         headers.insert("Content-Length".to_string(), "100".to_string());
         assert!(validator.validate_headers(&headers).is_err());
     }
+
+    #[test]
+    fn test_validate_headers_empty_is_ok() {
+        let v = SecurityValidator::new();
+        let headers: HashMap<String, String> = HashMap::new();
+        assert!(v.validate_headers(&headers).is_ok());
+    }
+
+    #[test]
+    fn test_validate_headers_case_insensitive() {
+        let v = SecurityValidator::new();
+        // 大小写变体都应被识别为危险头部
+        for variant in ["AUTHORIZATION", "Authorization", "authorization"] {
+            let mut h = HashMap::new();
+            h.insert(variant.to_string(), "Bearer x".to_string());
+            assert!(
+                v.validate_headers(&h).is_err(),
+                "{variant} 应被识别为危险头部"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_headers_each_dangerous_one_by_one() {
+        let v = SecurityValidator::new();
+        // 列表里每个危险头部单独命中都应失败
+        for name in &v.dangerous_headers {
+            let mut h = HashMap::new();
+            h.insert(name.clone(), "v".to_string());
+            assert!(v.validate_headers(&h).is_err(), "{name} 应被拦截");
+        }
+    }
+
+    #[test]
+    fn test_validate_headers_error_message_contains_header_name() {
+        let v = SecurityValidator::new();
+        let mut h = HashMap::new();
+        h.insert("Host".to_string(), "evil".to_string());
+        let err = v.validate_headers(&h).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("Host"), "错误消息应包含头部名: {msg}");
+    }
+
+    // ---------- T3 SSRF 防护（validate_target_url） ----------
 
     #[test]
     fn test_validate_target_url() {
@@ -223,6 +306,59 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_target_url_ipv6_loopback_blocked() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("http://[::1]/x").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_ipv6_link_local_blocked() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("http://[fe80::1]/x").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_hostname_skips_internal_check() {
+        // 主机名（非 IP）不触发内网检查，应放行
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("https://example.com").is_ok());
+    }
+
+    #[test]
+    fn test_validate_target_url_invalid_url_returns_err() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("not a url").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_ftp_blocked_by_blacklist() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("ftp://evil.com").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_gopher_blocked() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("gopher://evil.com").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_169_254_blocked() {
+        // link-local 169.254.0.0/16
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("http://169.254.1.1/x").is_err());
+    }
+
+    #[test]
+    fn test_validate_target_url_fc00_ipv6_ula_blocked() {
+        // IPv6 unique local fc00::/7
+        let v = SecurityValidator::new();
+        assert!(v.validate_target_url("http://[fc00::1]/x").is_err());
+    }
+
+    // ---------- T4 CIDR 列表校验 ----------
+
+    #[test]
     fn test_validate_cidr_list() {
         let validator = SecurityValidator::new();
 
@@ -239,5 +375,76 @@ mod tests {
             .validate_cidr_list(&["0.0.0.0/0".to_string()])
             .is_err());
         assert!(validator.validate_cidr_list(&["::/0".to_string()]).is_err());
+    }
+
+    #[test]
+    fn test_validate_cidr_list_empty_is_ok() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_cidr_list(&[]).is_ok());
+    }
+
+    #[test]
+    fn test_validate_cidr_list_invalid_cidr_returns_err() {
+        let v = SecurityValidator::new();
+        assert!(v.validate_cidr_list(&["not-a-cidr".to_string()]).is_err());
+    }
+
+    #[test]
+    fn test_validate_cidr_list_error_contains_value() {
+        let v = SecurityValidator::new();
+        let err = v
+            .validate_cidr_list(&["0.0.0.0/0".to_string()])
+            .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("0.0.0.0/0"), "错误消息应含原值: {msg}");
+    }
+
+    // ---------- T5 敏感信息检查 ----------
+
+    #[test]
+    fn test_check_sensitive_config_clean_returns_ok() {
+        let v = SecurityValidator::new();
+        let clean = "listen: tcp://0.0.0.0:8080\ntarget: tcp://127.0.0.1:80\n";
+        assert!(v.check_sensitive_config(clean).is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_empty_returns_ok() {
+        let v = SecurityValidator::new();
+        assert!(v.check_sensitive_config("").is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_password_pattern_returns_ok_with_warning() {
+        // 敏感信息只 warn 不 fail（仍返回 Ok），保证配置加载不被阻断
+        let v = SecurityValidator::new();
+        let with_pw = "password: supersecret\n";
+        assert!(v.check_sensitive_config(with_pw).is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_secret_pattern() {
+        let v = SecurityValidator::new();
+        assert!(v.check_sensitive_config("secret: my-key-value\n").is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_api_key_pattern() {
+        let v = SecurityValidator::new();
+        assert!(v.check_sensitive_config("api_key: abc123").is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_token_pattern() {
+        let v = SecurityValidator::new();
+        assert!(v.check_sensitive_config("token: bearer-xyz").is_ok());
+    }
+
+    #[test]
+    fn test_check_sensitive_config_private_key_pattern() {
+        let v = SecurityValidator::new();
+        assert!(v
+            .check_sensitive_config("private_key: -----BEGIN-----")
+            .is_ok());
     }
 }
